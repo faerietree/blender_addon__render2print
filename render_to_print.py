@@ -354,7 +354,7 @@ def print2scale(ps, context):
                 # <=> Orthographic_scale = H_format_real / unit_settings_scale_length / scale_factor
                 #
                 #print('unit setting: ', context.scene.unit_settings.scale_length, ' longer_side in meters: ', longer_side)
-                context.scene.camera.data.ortho_scale = ((1 / 1.3648) / float(context.scene.unit_settings.scale_length)) / float(ps.in_print2scale_scale_factor)
+                context.scene.camera.data.ortho_scale = (1.3648 / float(context.scene.unit_settings.scale_length)) / float(ps.in_print2scale_scale_factor)
                 
                 
             elif (context.scene.camera.data.type == 'PERSP'):
