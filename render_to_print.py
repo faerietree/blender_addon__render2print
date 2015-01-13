@@ -21,8 +21,8 @@
 bl_info = {
     'name': 'Render to Print to Scale',
     'author': 'Marco Crippa <thekrypt77@tiscali.it>, Dealga McArdle, J.R.B.-Wein <Radagast@DragonTale.DE>, faerietree',
-    'version': (0, 3),
-    'blender': (2, 6, 8),
+    'version': (0, 4),
+    'blender': (2, 6, 9),
     'location': 'Render > Render to Print',
     'description': 'Set the size of the render for a print',
     'wiki_url': 'http://wiki.blender.org/index.php/Extensions:2.6/Py/'\
@@ -343,7 +343,7 @@ def print2scale(ps, context):
             if context.scene.camera.data.type == 'ORTHO':    #ORTHO, PANO, PERSP
                 #blenderartists.org/forum/showthread.php?257556-Render-to-Scale-in-Blender-using-the-Render-to-Print-addon-!
                 #They use the magic number 1.3648 - wonder why, its origin needs to be determined.
-                #     Orthographic_scale                = 1.3648 x L_format_real x L_virtual / L_real
+                #     Orthographic_scale                = 1.3648 x L_format_real x L_real / L_virtual
                 # <=> Orthographic_scale * scale_factor = 1.3648 x L_format_real 
                 # <=> Orthographic_scale * scale_factor = H_format_real
                 #                                                       where L_real = scale factor * L_virtual
@@ -354,7 +354,7 @@ def print2scale(ps, context):
                 # <=> Orthographic_scale = H_format_real / unit_settings_scale_length / scale_factor
                 #
                 #print('unit setting: ', context.scene.unit_settings.scale_length, ' longer_side in meters: ', longer_side)
-                context.scene.camera.data.ortho_scale = (1.3648 / float(context.scene.unit_settings.scale_length)) / float(ps.in_print2scale_scale_factor)
+                context.scene.camera.data.ortho_scale = (ps.width_cm / float(m2cm) / context.scene.unit_settings.scale_length) / ps.in_print2scale_scale_factor
                 
                 
             elif (context.scene.camera.data.type == 'PERSP'):
