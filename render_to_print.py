@@ -20,9 +20,9 @@
 
 bl_info = {
     'name': 'Render to Print to Scale',
-    'author': 'Marco Crippa <thekrypt77@tiscali.it>, Dealga McArdle, J.R.B.-Wein <Radagast@DragonTale.DE>, faerietree',
-    'version': (0, 4),
-    'blender': (2, 6, 9),
+    'author': 'Marco Crippa <thekrypt77@tiscali.it>, Dealga McArdle, J.R.B.-Wein <radagast@ardaron.de>',
+    'version': (0, 5),
+    'blender': (2, 7, 3),
     'location': 'Render > Render to Print',
     'description': 'Set the size of the render for a print',
     'wiki_url': 'http://wiki.blender.org/index.php/Extensions:2.6/Py/'\
@@ -354,7 +354,7 @@ def print2scale(ps, context):
                 # <=> Orthographic_scale = H_format_real / unit_settings_scale_length / scale_factor
                 #
                 #print('unit setting: ', context.scene.unit_settings.scale_length, ' longer_side in meters: ', longer_side)
-                context.scene.camera.data.ortho_scale = (ps.width_cm / float(m2cm) / context.scene.unit_settings.scale_length) / ps.in_print2scale_scale_factor
+                context.scene.camera.data.ortho_scale = (longer_side / context.scene.unit_settings.scale_length) / ps.in_print2scale_scale_factor
                 
                 
             elif (context.scene.camera.data.type == 'PERSP'):
