@@ -417,14 +417,14 @@ def print2scale(ps, context):
             #######
             # Position in a corner. Note: It is extra complicated in PERSPECTIVE mode which is TODO.
             #SPACE_PER_CHAR = 2
-            MARGIN_TO_EDGE = 0
+            MARGIN_TO_EDGE = ps.width_cm / float(m2cm) / 20
             # x = camera origin.x (global) + render sizeX / 2 - space * number_of_characters
             # TODO Use data.bounding_box_dimension instead of number of characters and hardcoding?
-            req_space_x = scale_ratio_text_object.dimensions[0] * scale_ratio_text_object.scale.x / 2 * zoom_result
-            req_space_y = scale_ratio_text_object.dimensions[1] * scale_ratio_text_object.scale.y / 2 * zoom_result
+            req_space_x = scale_ratio_text_object.dimensions[0] * scale_ratio_text_object.scale.x / 2# * zoom_result
+            req_space_y = scale_ratio_text_object.dimensions[1] * scale_ratio_text_object.scale.y / 2# * zoom_result
             # Assuming the text object is created as such that it is readable when looking down from global positive Z axis.
-            req_space_z = scale_ratio_text_object.dimensions[2] * scale_ratio_text_object.scale.z / 2 * zoom_result
-            
+            req_space_z = scale_ratio_text_object.dimensions[2] * scale_ratio_text_object.scale.z / 2# * zoom_result
+            print('font object dimensions: ' + str(scale_ratio_text_object.dimensions)) 
             #    Camera -
             #     | |   |
             #    |   |  z
@@ -436,9 +436,8 @@ def print2scale(ps, context):
             # Not to forget that the camera object's rotation is crucial as it influences the direction of the render
             # resolution x and y. So this is TODO if the parenting approach fails but it ain't (inheriting the camera
             # rotation is easiest).
-            # TODO Take format => dimensions into account. # Not using resolution_x in favour for the real size. TODO sensible? (resolution_x is pretty big, it required the pixels_from_print in inverse and thus we just use width_cm and height_cm which is the same)
-            x = ps.width_cm / float(m2cm) / 2 * zoom_result - req_space_x - MARGIN_TO_EDGE
-            y = ps.height_cm / float(m2cm) / 2 * zoom_result - req_space_y - MARGIN_TO_EDGE
+            x = ps.width_cm / float(m2cm) / 2 - req_space_x - MARGIN_TO_EDGE
+            y = ps.height_cm / float(m2cm) / 2 - req_space_y - MARGIN_TO_EDGE
 
             # Because the camera's z axis points in the direction of the incoming rays, parenting and offsetting in negative Z direction is enough: 
             z = -.1 - req_space_z
