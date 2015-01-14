@@ -25,11 +25,13 @@ bl_info = {
     'blender': (2, 7, 3),
     'location': 'Render > Render to Print',
     'description': 'Set the size of the render for a print',
-    'wiki_url': 'http://wiki.blender.org/index.php/Extensions:2.6/Py/'\
+    'wiki_url': 'http://wiki.blender.org/index.php/Extensions:2.7/Py/'\
         'Scripts/Render/Render to Print',
     'tracker_url': 'https://projects.blender.org/tracker/index.php?'\
         'func=detail&aid=24219',
-    'category': 'Render'}
+    'repository': 'http://github.com/faerietree/blender_addon__render2print',
+    'category': 'Render'
+}
 
 
 import math
@@ -43,6 +45,7 @@ from bpy.props import (IntProperty,
                        BoolProperty
                        )
 
+scale_ratio_text_object = None
 
 paper_presets = (
     ("custom_1_1", "custom", ""),
@@ -151,7 +154,7 @@ def print2scale_processInput(self, context):
         return {'FINISHED'}
     
 
-    #if the scale factor is changed by an amount less than 1 it has to be either incremented or
+    # If the scale factor is changed by an amount less than 1 it has to be either incremented or
     # decremented and NOT rounded as this will result in the old result.
     # This special case is treated for convenience only.
     if ps.in_print2scale_scale_factor > print2scale_scale_factor_previous:
@@ -163,13 +166,13 @@ def print2scale_processInput(self, context):
 
     #else: equal! nothing to change!
     
-    #store the current value for next time:
+    # Store the current value for next time:
     print2scale_scale_factor_previous = ps.in_print2scale_scale_factor
 
 
 
 
-class RenderPrintSertings(PropertyGroup):
+class RenderPrintSettings(PropertyGroup):
     unit_from = EnumProperty(
             name="Set from",
             description="Set from",
@@ -238,7 +241,7 @@ class RenderPrintSertings(PropertyGroup):
             ,default=True
             #,update=print2scale_reset_camera_focal_length_or_orthographic_scale
     )
-    #Remapping probably will lead to much confusion. e.g. model 10 -> 1 on the plan means the output will be a model copy 10 times smaller.
+    # Remapping probably will lead to much confusion. e.g. model 10 -> 1 on the plan means the output will be a model copy 10 times smaller.
     # Many architects will accidentally fill in 1:10 instead because they forget that here the ratio is (model:plan) and not (plan:model) like printed
     # on the plan. So unfortunately this will cost a lot of trees as the prints in that a size will be rendered useless.
     # => SO NOW WE USE SCALE FACTOR ONLY! THAT'S MUCH MORE INTUITIVE AND IS NOTHING ELSE than print ratio but without the confusion.
@@ -252,10 +255,10 @@ class RenderPrintSertings(PropertyGroup):
     #)
     #in_print2scale_scale_remap_target_printed = IntProperty(
     
-    #NOTE:
-    #The print ratio is nothing else than a scale factor. E.g. 1:10 on a plan means the original real measurements are scaled down by factor 10.
-    #ATTENTION:
-    #Precondition is that the 3D model must be modelled to scale. Only then printing a plan to scale, scaled down or up, gives meaningful dimensions.
+    # NOTE:
+    # The print ratio is nothing else than a scale factor. E.g. 1:10 on a plan means the original real measurements are scaled down by factor 10.
+    # ATTENTION:
+    # Precondition is that the 3D model must be modelled to scale. Only then printing a plan to scale, scaled down or up, gives meaningful dimensions.
     # E.g. if a 1m long wing is modelled with 1mm length in blender instead, then it has to be printed with a 1000:1 for a 1:1 scale on a 1m sheet
     # or 100:1 on a 1/10m sheet, resulting in a factor of 1:10. Unfortunately the program can't know if the model now really is that small (1mm) or
     # not and labels the plan as 100:1 in scale - obviously confusing all engineers and architects involved.
@@ -283,46 +286,22 @@ def print2scale(ps, context):
         #print2scale
         #--------------------------------------------------------
         if (ps.in_print2scale):
+            
+            if (context.scene.objects.active != None and (context.scene.objects.active.type == 'OBJECT' or context.scene.objects.active.type == 'MESH')):
+                bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+                print('Switched to Object mode.')
+            else:
+                if (context.mode == 'OBJECT'):
+                    print('Warning: Switched not to Object mode but are in Edit mode.')
+                
             if (context.scene.camera is None):
                 #create a camera
                 bpy.ops.object.add('CAMERA', layers=(True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True))
                 ##the added object keeps the short name, while the others are renamed
                 #context.scene.selected_object['Camera']
-                
             #
             #At this point the scene must have a camera.
             #
-        
-            ########
-            # ADD SCALE FACTOR FOR PRINTING
-            ########
-            #add a text for the scale factor e.g. 1:10 on the print.
-#            bpy.ops.object.text_add(view_align=True, enter_editmode=True)
-            
-            #print scale factor
-            #TODO
-            
-            #leave editmode to objectmode
-#            bpy.ops.object.editmode_toggle()
-            
-            #both of the following results in the just added text object:
-            #getLastObjectInSelection(context)
-            #text_object = context.active_object
-            
-            #make sure nothing is selected
- #           bpy.ops.object.select_all(mode='DESELECT')
-            
-            #select the camera
-#            context.scene.camera.select = True
-            
-            #make the text object active
-#            text_object.select = True
-#            context.scene.objects.active = text_object
-            
-            #add a constraint to the active object with the selected object(s) as target(s)
-#            bpy.ops.object.constraint_add_with_targets('TRACK_TO')
-
-
             
             #######
             # SET THE CAMERA's ZOOM OR ORTHOGRAPHIC SCALE
@@ -340,6 +319,7 @@ def print2scale(ps, context):
             #print('old ortho scale: ', context.scene.camera.data.ortho_scale)                
             if not context.scene.camera.data.type == 'ORTHO':
                 context.scene.camera.data.type = 'ORTHO'
+            zoom_result = 1 # May result in too big a text representation of the scale ratio but better than too small (can resize later). 
             if context.scene.camera.data.type == 'ORTHO':    #ORTHO, PANO, PERSP
                 #blenderartists.org/forum/showthread.php?257556-Render-to-Scale-in-Blender-using-the-Render-to-Print-addon-!
                 #They use the magic number 1.3648 - wonder why, its origin needs to be determined.
@@ -355,27 +335,163 @@ def print2scale(ps, context):
                 #
                 #print('unit setting: ', context.scene.unit_settings.scale_length, ' longer_side in meters: ', longer_side)
                 context.scene.camera.data.ortho_scale = (longer_side / context.scene.unit_settings.scale_length) / ps.in_print2scale_scale_factor
+                zoom_result = context.scene.camera.data.ortho_scale
                 
                 
             elif (context.scene.camera.data.type == 'PERSP'):
                 #TODO: somehow involve the location and the field of view!
                 context.scene.camera.data.focal_length = (longer_side / context.scene.unit_settings.scale_length) / ps.in_print2scale_scale_factor
+                zoom_result = context.scene.camera.data.focal_length
 
             #else:
                 #PANO
                 #TODO
                 
             #print('new ortho scale: ', context.scene.camera.data.ortho_scale)
+        
+        
+        
+            ########
+            # UPDATE THE TEXT OF THE SCALE RATIO TEXT OBJECT.
+            #######
+            global scale_ratio_text_object
+            
+            if (scale_ratio_text_object is None):
+                # Add a text for the scale factor e.g. 1:10 on the print.
+                bpy.ops.object.text_add(view_align=True, enter_editmode=False)
+                # type='FONT'
+                # Both of the following results in the just added text object:
+                #getLastObjectInSelection(context)
+                scale_ratio_text_object = context.active_object
+                scale_ratio_text_object.select = True
+            else:
+                # Make sure nothing is selected:
+                #if len(context.selected_objects) > 0: complains about context.
+                #    bpy.ops.object.select_all(action='DESELECT')
+                scale_ratio_text_object.select = True
+                context.scene.objects.active = scale_ratio_text_object
+                
+            # Make sure it's easier to find, i.e. draw it in front of any other objects: 
+            scale_ratio_text_object.show_x_ray = True
+            
+            # Enter edit mode:
+            bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+            
+            # Update scale ratio factor:
+            scale_ratio_text = convertScaleFactorToRatioString(scale_factor=ps.in_print2scale_scale_factor);
+            if (scale_ratio_text_object.type == 'FONT'):
+                bpy.ops.font.select_all()
+                bpy.ops.font.text_cut()
+                print('setting text: ' + scale_ratio_text)
+                bpy.ops.font.text_insert(text=scale_ratio_text)
+            else:
+                print('Notice: Could not set scale ratio text representation because object appears to be no text/font object: ' + scale_ratio_text_object)
+                
+            # Leave editmode to objectmode:
+            #bpy.ops.object.editmode_toggle()
+            bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+            
+            # Scale the object to be visible depending on the chosen scale ratio
+            # (which relates to the render size and object dimensions/scale used for modeling).
+            # The smaller the scale_factor (e.g. 1:50 = 1/50) the farther away the camera will appear.
+            # Thus the more the text object must be scaled up to compensate.
+            # TODO Take format => dimensions into account.
+            object_scale = .01 * zoom_result  # figured by experimenting.
+            # It's 1/10 blender unit away in negative z-direction when using the parenting approach.
+            # It should be readable when printed out, thus the format/size (A4, A3, ..) must be read to know
+            # if setting it to 1/1000 of the space available will suffice. For A4  
+            scale_ratio_text_object.scale.x = object_scale / ps.in_print2scale_scale_factor
+            scale_ratio_text_object.scale.y = object_scale / ps.in_print2scale_scale_factor
+            scale_ratio_text_object.scale.z = object_scale / ps.in_print2scale_scale_factor
+            
+            #######
+            # Position in a corner. Note: It is extra complicated in PERSPECTIVE mode which is TODO.
+            #SPACE_PER_CHAR = 2
+            MARGIN_TO_EDGE = 0
+            # x = camera origin.x (global) + render sizeX / 2 - space * number_of_characters
+            # TODO Use data.bounding_box_dimension instead of number of characters and hardcoding?
+            req_space_x = scale_ratio_text_object.dimensions[0] * scale_ratio_text_object.scale.x / 2 * zoom_result
+            req_space_y = scale_ratio_text_object.dimensions[1] * scale_ratio_text_object.scale.y / 2 * zoom_result
+            # Assuming the text object is created as such that it is readable when looking down from global positive Z axis.
+            req_space_z = scale_ratio_text_object.dimensions[2] * scale_ratio_text_object.scale.z / 2 * zoom_result
+            
+            #    Camera -
+            #     | |   |
+            #    |   |  z
+            #   |     | |
+            #   |--x--| -   Assuming global Z-axis location is the greatest may not be always true.
+            # So better determine the biggest distance to scene's center first (I think this won't
+            # work without taking care of the camera's local/delta rotation)?
+            # Instead of scene center in this case it might be favourable to use all the objects' medians' median.
+            # Not to forget that the camera object's rotation is crucial as it influences the direction of the render
+            # resolution x and y. So this is TODO if the parenting approach fails but it ain't (inheriting the camera
+            # rotation is easiest).
+            # TODO Take format => dimensions into account. # Not using resolution_x in favour for the real size. TODO sensible? (resolution_x is pretty big, it required the pixels_from_print in inverse and thus we just use width_cm and height_cm which is the same)
+            x = context.scene.camera.location.x + ps.width_cm / float(m2cm) / 2 * zoom_result - req_space_x - MARGIN_TO_EDGE
+            y = context.scene.camera.location.y + ps.height_cm / float(m2cm) / 2 * zoom_result - req_space_y - MARGIN_TO_EDGE
+
+            # Because the camera's z axis points in the direction of the incoming rays, parenting and offsetting in negative Z direction is enough: 
+            z = -.1 - req_space_z
+            scale_ratio_text_object.delta_location = (x, y, z)
+            print('Scale Ratio Text Object.Delta Location: ' + str(scale_ratio_text_object.delta_location.x) + ', ' +  str(scale_ratio_text_object.delta_location.y) + ', ' + str(scale_ratio_text_object.delta_location.z) ) 
+
+            ######
+            # PARENT TO CAMERA
+            ######
+            # Make sure nothing is selected:
+            bpy.ops.object.select_all(action='DESELECT')
+            
+            # Select the to-be-child objects:
+            scale_ratio_text_object.select = True
+            # Select the to-be-parent object and make active:
+            context.scene.camera.select = True
+            context.scene.objects.active = context.scene.camera
+            
+            bpy.ops.object.parent_set(type='OBJECT', keep_transform=False)
+
+
+            ######
+            # ADD TRACK TO CONSTRAINT (enable and debug if parenting approach above fails)
+            ######
+            # Make sure nothing is selected:
+            #bpy.ops.object.select_all(action='DESELECT')
+            
+            # Select the camera:
+            #context.scene.camera.select = True
+            
+            # Make the text object active:
+            #scale_ratio_text_object.select = True
+            #context.scene.objects.active = scale_ratio_text_object
+            
+            # Add a constraint to the active object with the selected object(s) as target(s):
+            #bpy.ops.object.constraint_add_with_targets('TRACK_TO')
+
+
+            
 
 
 
 
-
+def convertScaleFactorToRatioString(scale_factor):
+    text = None
+    if (scale_factor < 1):
+        num = scale_factor
+        #while str(num).find('.') != -1:
+        #denominator = 1
+        #while round(num * denominator, 0) != num * denominator:
+        #    denominator = denominator * 10
+        if (num != 0):
+            text = ' 1:' + str(round(1 / num, 2))
+        
+    else:
+        text = str(int(scale_factor)) + ':1'
+        
+    return text 
 
 
 
     
-
+# TODO: Make scale length scene settings aware.
 def pixels_from_print(ps):
     tipo, dim_w, dim_h = paper_presets_data[ps.preset]
 
@@ -410,6 +526,7 @@ def pixels_from_print(ps):
         ps.height_cm = (ps.height_px / ps.dpi) * 2.54
 
 
+
 class RENDER_PT_print(Panel):
     bl_label = "Render to Print"
     bl_space_type = 'PROPERTIES'
@@ -426,25 +543,8 @@ class RENDER_PT_print(Panel):
         #PRINT2SCALE
         row00 = layout.row(align=True)
         text = "Print to scale "
-        if (ps.in_print2scale_scale_factor < 1):
-            num = ps.in_print2scale_scale_factor
-            #while str(num).find('.') != -1:
-            #denominator = 1
-            #while round(num * denominator, 0) != num * denominator:
-            #    denominator = denominator * 10
-            if (num != 0):
-                text = text + ' 1:' + str(round(1 / num, 2))
-                
-            
-        else:
-            text = text + str(int(ps.in_print2scale_scale_factor)) + ':1'
-
-
-
-
-
-
-            
+        text = text + convertScaleFactorToRatioString(ps.in_print2scale_scale_factor)
+         
         row00.prop(ps, "in_print2scale", text=text)
         
         row01 = layout.row(align=True)
@@ -484,7 +584,7 @@ class RENDER_PT_print(Panel):
         row6.label("Inch Height: %.2f" % (ps.height_cm / 2.54))
         col.separator()
 
-        row7.operator("render.apply_size", icon="RENDER_STILL")
+        row7.operator("render.apply_render2print_settings", icon="RENDER_STILL")
 
         #  this if else deals with hiding UI elements when logic demands it.
         tipo = paper_presets_data[ps.preset][0]
@@ -533,10 +633,10 @@ class RENDER_PT_print(Panel):
 
 m2cm = 100
 
-class RENDER_OT_apply_size(Operator):
-    bl_idname = "render.apply_size"
-    bl_label = "Apply Print to Render"
-    bl_description = "Set the render dimension"
+class RENDER_OT_apply_render2print_settings(Operator):
+    bl_idname = "render.apply_render2print_settings"
+    bl_label = "Apply Render2Print settings."
+    bl_description = "Set the render dimension."
 
     def execute(self, context):
 
@@ -549,11 +649,7 @@ class RENDER_OT_apply_size(Operator):
         render.resolution_x = ps.width_px
         render.resolution_y = ps.height_px
         
-
         print2scale(ps, context)
-
-
-
 
         return {'FINISHED'}
     
@@ -569,17 +665,17 @@ def getLastObjectInSelection(context):
 
 
 def register():
-    bpy.utils.register_class(RENDER_OT_apply_size)
+    bpy.utils.register_class(RENDER_OT_apply_render2print_settings)
     bpy.utils.register_class(RENDER_PT_print)
-    bpy.utils.register_class(RenderPrintSertings)
+    bpy.utils.register_class(RenderPrintSettings)
 
-    Scene.print_settings = PointerProperty(type=RenderPrintSertings)
+    Scene.print_settings = PointerProperty(type=RenderPrintSettings)
 
 
 def unregister():
-    bpy.utils.unregister_class(RENDER_OT_apply_size)
+    bpy.utils.unregister_class(RENDER_OT_apply_render2print_settings)
     bpy.utils.unregister_class(RENDER_PT_print)
-    bpy.utils.unregister_class(RenderPrintSertings)
+    bpy.utils.unregister_class(RenderPrintSettings)
     del Scene.print_settings
 
 
