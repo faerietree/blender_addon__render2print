@@ -45,7 +45,6 @@ from bpy.props import (IntProperty,
                        BoolProperty
                        )
 
-scale_ratio_text_object = None
 
 paper_presets = (
     ("custom_1_1", "custom", ""),
@@ -279,6 +278,7 @@ class RenderPrintSettings(PropertyGroup):
             ,max=10000
             ,update=print2scale_recalculate_camera_focal_length_or_orthographic_scale
     )
+    #cache_scale_ratio_text_object = None # ObjectProperty or ReferenceProperty
 
             
 def print2scale(ps, context):
@@ -291,7 +291,7 @@ def print2scale(ps, context):
                 bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
                 print('Switched to Object mode.')
             else:
-                if (context.mode == 'OBJECT'):
+                if (context.mode != 'OBJECT'):
                     print('Warning: Switched not to Object mode but are in Edit mode.')
                 
             if (context.scene.camera is None):
@@ -354,16 +354,26 @@ def print2scale(ps, context):
             ########
             # UPDATE THE TEXT OF THE SCALE RATIO TEXT OBJECT.
             #######
-            global scale_ratio_text_object
+            # Somehow this always gives None. So much to the topic scripting languages are quicker and while python is great, C/C++ would be straight forward.
+            #if (hasattr(ps, 'cache_scale_ratio_text_object')):
+            #    print('cache is: ' + str(ps.cache_scale_ratio_text_object))
+            #if (not hasattr(ps, 'cache_scale_ratio_text_object') or not ps.cache_scale_ratio_text_object):
+            scale_ratio_text_object = None
+            for o in context.scene.camera.children:
+                # to allow other text/font objects as camera children, check for scale_ratio too:
+                if (o and o.type == 'FONT' and o.name.find('scale_ratio') != -1):
+                    scale_ratio_text_object = o
+                    break
             
-            if (scale_ratio_text_object is None):
+            if (not scale_ratio_text_object):  
                 # Add a text for the scale factor e.g. 1:10 on the print.
                 bpy.ops.object.text_add(view_align=True, enter_editmode=False)
                 # type='FONT'
-                # Both of the following results in the just added text object:
-                #getLastObjectInSelection(context)
+                # The following results in the just added text object:
+                #scale_ratio_text_object = getLastObjectInSelection(context)
+                #print('active object: ' + str(context.active_object))
                 scale_ratio_text_object = context.active_object
-                scale_ratio_text_object.select = True
+                scale_ratio_text_object.name = 'scale_ratio'
             else:
                 # Make sure nothing is selected:
                 #if len(context.selected_objects) > 0: complains about context.
@@ -659,7 +669,7 @@ class RENDER_OT_apply_render2print_settings(Operator):
     
     
 def getLastObjectInSelection(context):
-    return context.scene.selected_objects[len(context.scene.selected_objects) - 1]
+    return context.selected_objects[len(context.selected_objects) - 1]
 
 
 
