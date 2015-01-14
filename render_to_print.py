@@ -438,9 +438,12 @@ def print2scale(ps, context):
             # rotation is easiest).
             x = ps.width_cm / float(m2cm) / 2 - req_space_x - MARGIN_TO_EDGE
             y = ps.height_cm / float(m2cm) / 2 - req_space_y - MARGIN_TO_EDGE
-
+            x = x / context.scene.unit_settings.scale_length
+            y = y / context.scene.unit_settings.scale_length
+            
             # Because the camera's z axis points in the direction of the incoming rays, parenting and offsetting in negative Z direction is enough: 
             z = -.1 - req_space_z
+            #z = z / context.scene.unit_settings.scale_length
             scale_ratio_text_object.delta_location = (x, y, z)
             print('Scale Ratio Text Object.Delta Location: ' + str(scale_ratio_text_object.delta_location.x) + ', ' +  str(scale_ratio_text_object.delta_location.y) + ', ' + str(scale_ratio_text_object.delta_location.z) ) 
 
