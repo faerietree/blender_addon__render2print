@@ -437,8 +437,8 @@ def print2scale(ps, context):
             # resolution x and y. So this is TODO if the parenting approach fails but it ain't (inheriting the camera
             # rotation is easiest).
             # TODO Take format => dimensions into account. # Not using resolution_x in favour for the real size. TODO sensible? (resolution_x is pretty big, it required the pixels_from_print in inverse and thus we just use width_cm and height_cm which is the same)
-            x = context.scene.camera.location.x + ps.width_cm / float(m2cm) / 2 * zoom_result - req_space_x - MARGIN_TO_EDGE
-            y = context.scene.camera.location.y + ps.height_cm / float(m2cm) / 2 * zoom_result - req_space_y - MARGIN_TO_EDGE
+            x = ps.width_cm / float(m2cm) / 2 * zoom_result - req_space_x - MARGIN_TO_EDGE
+            y = ps.height_cm / float(m2cm) / 2 * zoom_result - req_space_y - MARGIN_TO_EDGE
 
             # Because the camera's z axis points in the direction of the incoming rays, parenting and offsetting in negative Z direction is enough: 
             z = -.1 - req_space_z
