@@ -410,9 +410,9 @@ def print2scale(ps, context):
             # It's 1/10 blender unit away in negative z-direction when using the parenting approach.
             # It should be readable when printed out, thus the format/size (A4, A3, ..) must be read to know
             # if setting it to 1/1000 of the space available will suffice. For A4  
-            scale_ratio_text_object.scale.x = object_scale / ps.in_print2scale_scale_factor
-            scale_ratio_text_object.scale.y = object_scale / ps.in_print2scale_scale_factor
-            scale_ratio_text_object.scale.z = object_scale / ps.in_print2scale_scale_factor
+            scale_ratio_text_object.scale.x = object_scale * ps.in_print2scale_scale_factor
+            scale_ratio_text_object.scale.y = object_scale * ps.in_print2scale_scale_factor
+            scale_ratio_text_object.scale.z = object_scale * ps.in_print2scale_scale_factor
             
             #######
             # Position in a corner. Note: It is extra complicated in PERSPECTIVE mode which is TODO.
@@ -436,14 +436,14 @@ def print2scale(ps, context):
             # Not to forget that the camera object's rotation is crucial as it influences the direction of the render
             # resolution x and y. So this is TODO if the parenting approach fails but it ain't (inheriting the camera
             # rotation is easiest).
-            x = ps.width_cm / float(m2cm) / 2 - req_space_x - MARGIN_TO_EDGE
-            y = ps.height_cm / float(m2cm) / 2 - req_space_y - MARGIN_TO_EDGE
+            x = ps.width_cm / ps.in_print2scale_scale_factor / float(m2cm) / 2 - req_space_x - MARGIN_TO_EDGE
+            y = ps.height_cm / ps.in_print2scale_scale_factor / float(m2cm) / 2 - req_space_y - MARGIN_TO_EDGE
             x = x / context.scene.unit_settings.scale_length
             y = y / context.scene.unit_settings.scale_length
             
             # Because the camera's z axis points in the direction of the incoming rays, parenting and offsetting in negative Z direction is enough: 
             z = -.1 - req_space_z
-            #z = z / context.scene.unit_settings.scale_length
+            #z = z / context.scene.unit_settings.scale_length / ps.in_print2scale_scale_factor
             scale_ratio_text_object.delta_location = (x, y, z)
             print('Scale Ratio Text Object.Delta Location: ' + str(scale_ratio_text_object.delta_location.x) + ', ' +  str(scale_ratio_text_object.delta_location.y) + ', ' + str(scale_ratio_text_object.delta_location.z) ) 
 
