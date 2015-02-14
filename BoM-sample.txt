@@ -1,3 +1,0 @@
-
-1x 	 	Group	 	Material: Material	 	[x:0.297m,y:0.21m,z:0.0m]
-1x 	 	Cube	 	Material: Material	 	[x:0.297m,y:0.21m,z:0.0m]
