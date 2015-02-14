@@ -484,7 +484,7 @@ def print2scale(ps, context):
 
 
 
-def convertScaleFactorToRatioString(scale_factor):
+def convertScaleFactorToRatioString(scale_factor, precision=2):
     text = None
     if (scale_factor < 1):
         num = scale_factor
@@ -493,10 +493,18 @@ def convertScaleFactorToRatioString(scale_factor):
         #while round(num * denominator, 0) != num * denominator:
         #    denominator = denominator * 10
         if (num != 0):
-            text = ' 1:' + str(round(1 / num, 2))
+            rounded = round(1 / num, precision)
+            rounded_to_integer = round(rounded, 0)
+            if rounded_to_integer == rounded:
+                rounded = int(rounded_to_integer)
+            text = ' 1:' + str(rounded)
         
     else:
-        text = str(int(scale_factor)) + ':1'
+        rounded = round(scale_factor, precision)
+        rounded_to_integer = round(rounded, 0)
+        if rounded_to_integer == rounded:
+            rounded = int(rounded_to_integer)
+        text = str(rounded) + ':1'
         
     return text 
 
@@ -598,7 +606,7 @@ class RENDER_PT_print(Panel):
 
         row7.operator("render.apply_render2print_settings", icon="RENDER_STILL")
 
-        #  this if else deals with hiding UI elements when logic demands it.
+        # Hide UI elements when logic demands it:
         tipo = paper_presets_data[ps.preset][0]
 
         if tipo != "custom":
