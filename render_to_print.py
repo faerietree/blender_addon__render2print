@@ -21,7 +21,7 @@
 bl_info = {
     'name': 'Render to Print to Scale',
     'author': 'Marco Crippa <thekrypt77@tiscali.it>, Dealga McArdle, J.R.B.-Wein <radagast@ardaron.de>',
-    'version': (0, 5),
+    'version': (0, 8),
     'blender': (2, 7, 3),
     'location': 'Render > Render to Print',
     'description': 'Set the size of the render for a print',
@@ -45,6 +45,12 @@ from bpy.props import (IntProperty,
                        BoolProperty
                        )
 
+LAYERS_ALL = (
+        True, True, True, True, True,
+        True, True, True, True, True,
+        True, True, True, True, True,
+        True, True, True, True, True
+        )
 
 paper_presets = (
     ("custom_1_1", "custom", ""),
@@ -295,8 +301,8 @@ def print2scale(ps, context):
                     print('Warning: Switched not to Object mode but are in Edit mode.')
                 
             if (context.scene.camera is None):
-                #create a camera
-                bpy.ops.object.add('CAMERA', layers=(True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True))
+                # Create a camera:
+                bpy.ops.object.add('CAMERA', layers=LAYERS_ALL)
                 ##the added object keeps the short name, while the others are renamed
                 #context.scene.selected_object['Camera']
             #
@@ -373,12 +379,64 @@ def print2scale(ps, context):
                 #scale_ratio_text_object = getLastObjectInSelection(context)
                 #print('active object: ' + str(context.active_object))
                 scale_ratio_text_object = context.active_object
+                scale_ratio_text_object.select = True
                 scale_ratio_text_object.name = 'scale_ratio'
+                ## Add track to contraint to properly align the text object towards the camera even if the camera position changed and the scale ratio text object is reused:
+                ## Make sure nothing is selected:
+                #bpy.ops.object.select_all(action='DESELECT')
+                ## Select the objects that shall be looked to:
+                #context.scene.camera.select = True
+                ## Select the object where the modifier/is added and set it as active object:  
+                #context.scene.objects.active = scale_ratio_text_object
+                #context.scene.objects.active.select = True
+                
+                ## Add a constraint to the active object with the selected object(s) as target(s):
+                #bpy.ops.object.constraint_add_with_targets(type='TRACK_TO')
+                #track_to = scale_ratio_text_object.constraints[-1]
+                #track_to.up_axis = 'UP_Y'
+                #track_to.track_axis = 'TRACK_Z'
+                
+                
+                ######
+                # PARENT TO CAMERA
+                ######
+                # Make sure nothing is selected:
+                bpy.ops.object.select_all(action='DESELECT')
+                
+                # Select the to-be-child objects:
+                scale_ratio_text_object.select = True
+                # Select the to-be-parent object and make active:
+                context.scene.camera.select = True
+                context.scene.objects.active = context.scene.camera
+                
+                bpy.ops.object.parent_set(type='OBJECT', keep_transform=False)
+                 
+                
+                ######
+                # ADD TRACK TO CONSTRAINT (enable and debug if parenting approach above fails)
+                ######
+                # Make sure nothing is selected:
+                bpy.ops.object.select_all(action='DESELECT')
+                
+                # Select the camera:
+                #context.scene.camera.select = True
+                
+                # Make the text object active:
+                #scale_ratio_text_object.select = True
+                #context.scene.objects.active = scale_ratio_text_object
+                
+                # Add a constraint to the active object with the selected object(s) as target(s):
+                #bpy.ops.object.constraint_add_with_targets('TRACK_TO')
+                
+                scale_ratio_text_object.select = True
+                context.scene.objects.active = scale_ratio_text_object
+                    
             else:
                 # Make sure nothing is selected:
                 #if len(context.selected_objects) > 0: complains about context.
                 #    bpy.ops.object.select_all(action='DESELECT')
                 scale_ratio_text_object.select = True
+                scale_ratio_text_object.layers = LAYERS_ALL # <- Note it's a constant and a reference at the same time. It should not be changed - and if then the side effect is that all objects that have LAYERS_ALL assigned, no longer show on all layers too.
                 context.scene.objects.active = scale_ratio_text_object
                 
             # Make sure it's easier to find, i.e. draw it in front of any other objects: 
@@ -405,26 +463,79 @@ def print2scale(ps, context):
             # (which relates to the render size and object dimensions/scale used for modeling).
             # The smaller the scale_factor (e.g. 1:50 = 1/50) the farther away the camera will appear.
             # Thus the more the text object must be scaled up to compensate.
-            # TODO Take format => dimensions into account.
-            object_scale = .01 * zoom_result  # figured by experimenting.
-            # It's 1/10 blender unit away in negative z-direction when using the parenting approach.
+            # Take format => dimensions into account.
+            # It's 1/10 blender unit away in negative z-direction when using the parenting approach. (TODO This z-direction distance must be taken into account should printing to scale with perspective camera ever be supported in the future.)
             # It should be readable when printed out, thus the format/size (A4, A3, ..) must be read to know
-            # if setting it to 1/1000 of the space available will suffice. For A4  
-            scale_ratio_text_object.scale.x = object_scale * ps.in_print2scale_scale_factor
-            scale_ratio_text_object.scale.y = object_scale * ps.in_print2scale_scale_factor
-            scale_ratio_text_object.scale.z = object_scale * ps.in_print2scale_scale_factor
+            # if setting it to 1/1000 of the space available will suffice. For A4
+            #object_scale = .01 * zoom_result  # figured by experimenting.
+            #scale_ratio_text_object.scale.x = object_scale * ps.in_print2scale_scale_factor
+            #scale_ratio_text_object.scale.y = object_scale * ps.in_print2scale_scale_factor
+            #scale_ratio_text_object.scale.z = object_scale * ps.in_print2scale_scale_factor
+            # Reset scale for the case the value was set to zero earlier (which leads to division by zero):
+            #scale_ratio_text_object.scale.x = 1.0
+            #scale_ratio_text_object.scale.y = 1.0
+            #scale_ratio_text_object.scale.z = 1.0
+            
+            # EITHER
+            height_available = ps.width_cm / m2cm
+            text_size_percentage = 10
+            target_height = height_available * text_size_percentage / 100
+            # OR
+            text_size = .010 # meters = 1cm = 10mm
+            # TODO Support more text sizes.
+            target_height = text_size / ps.in_print2scale_scale_factor
+            # Assumption: text object's width is largest. Height is 2nd longest. Depth/thickness comes third.
+            # TODO Figuring text height directly possible?
+            x = scale_ratio_text_object.dimensions[0]
+            y = scale_ratio_text_object.dimensions[1]
+            z = scale_ratio_text_object.dimensions[2]
+            print(scale_ratio_text_object.dimensions)
+            # By default it is assumed that the text is looked onto directly from positive Z axis towards negative Z axis.
+            second_largest_index = 0
+            largest_index = 2
+            smallest_index = 1
+            if x > y and x <= z or x > z and x <= y:
+                second_largest_index = 0
+                largest_index = 1
+                smallest_index = 2
+                if z > y:
+                    largest_index = 2
+                    smallest_index = 1
+            elif y > x and y <= z or y > z and y <= x:
+                second_largest_index = 1
+                largest_index = 0
+                smallest_index = 2
+                if z > x:
+                    largest_index = 2
+                    smallest_index = 0
+            elif z > x and z <= y or z > y and z <= x:
+                second_largest_index = 2
+                largest_index = 0
+                smallest_index = 1
+                if y > x:
+                    largest_index = 1
+                    smallest_index = 0
+                  
+            #else: # All are equal length, just stick to x.
+            # There had been a bug if two are equal and one differs. Then the wrong one is picked as second longest. While the transition from the < to the <= operator works around this bug, sorting a list instead might still be useful for performance (because random access in a list is constant).
+            object_text_height = scale_ratio_text_object.dimensions[second_largest_index]
+            print(object_text_height, ' target height: ', target_height) 
+            object_scale_factor = target_height / object_text_height
+            scale_ratio_text_object.scale.x *= object_scale_factor
+            scale_ratio_text_object.scale.y *= object_scale_factor
+            scale_ratio_text_object.scale.z *= object_scale_factor
+            
             
             #######
             # Position in a corner. Note: It is extra complicated in PERSPECTIVE mode which is TODO.
             #SPACE_PER_CHAR = 2
             MARGIN_TO_EDGE = ps.width_cm / float(m2cm) / 20
             # x = camera origin.x (global) + render sizeX / 2 - space * number_of_characters
-            # TODO Use data.bounding_box_dimension instead of number of characters and hardcoding?
-            req_space_x = scale_ratio_text_object.dimensions[0] * scale_ratio_text_object.scale.x / 2# * zoom_result
-            req_space_y = scale_ratio_text_object.dimensions[1] * scale_ratio_text_object.scale.y / 2# * zoom_result
-            # Assuming the text object is created as such that it is readable when looking down from global positive Z axis.
-            req_space_z = scale_ratio_text_object.dimensions[2] * scale_ratio_text_object.scale.z / 2# * zoom_result
-            print('font object dimensions: ' + str(scale_ratio_text_object.dimensions)) 
+            req_space_x = scale_ratio_text_object.dimensions[largest_index]# * zoom_result
+            req_space_y = scale_ratio_text_object.dimensions[second_largest_index]# * zoom_result
+            req_space_z = scale_ratio_text_object.dimensions[smallest_index] / 2# * zoom_result
+            
+            print('font object dimensions: ' + str(scale_ratio_text_object.dimensions))
             #    Camera -
             #     | |   |
             #    |   |  z
@@ -447,39 +558,9 @@ def print2scale(ps, context):
             scale_ratio_text_object.delta_location = (x, y, z)
             print('Scale Ratio Text Object.Delta Location: ' + str(scale_ratio_text_object.delta_location.x) + ', ' +  str(scale_ratio_text_object.delta_location.y) + ', ' + str(scale_ratio_text_object.delta_location.z) ) 
 
-            ######
-            # PARENT TO CAMERA
-            ######
-            # Make sure nothing is selected:
-            bpy.ops.object.select_all(action='DESELECT')
-            
-            # Select the to-be-child objects:
-            scale_ratio_text_object.select = True
-            # Select the to-be-parent object and make active:
-            context.scene.camera.select = True
-            context.scene.objects.active = context.scene.camera
-            
-            bpy.ops.object.parent_set(type='OBJECT', keep_transform=False)
 
 
-            ######
-            # ADD TRACK TO CONSTRAINT (enable and debug if parenting approach above fails)
-            ######
-            # Make sure nothing is selected:
-            #bpy.ops.object.select_all(action='DESELECT')
-            
-            # Select the camera:
-            #context.scene.camera.select = True
-            
-            # Make the text object active:
-            #scale_ratio_text_object.select = True
-            #context.scene.objects.active = scale_ratio_text_object
-            
-            # Add a constraint to the active object with the selected object(s) as target(s):
-            #bpy.ops.object.constraint_add_with_targets('TRACK_TO')
-
-
-            
+            scale_ratio_text_object.parent_type = 'OBJECT'
 
 
 
@@ -509,41 +590,32 @@ def convertScaleFactorToRatioString(scale_factor, precision=2):
     return text 
 
 
+INCH_TO_CM = 2.54 # conversion factor
 
-    
-# TODO: Make scale length scene settings aware.
 def pixels_from_print(ps):
     tipo, dim_w, dim_h = paper_presets_data[ps.preset]
 
-    if ps.unit_from == "CM_TO_PIXELS":
-        if tipo == "custom":
-            dim_w = ps.width_cm
-            dim_h = ps.height_cm
-            ps.width_cm = dim_w
-            ps.height_cm = dim_h
-        elif tipo != "custom" and ps.orientation == "Landscape":
+    if tipo != "custom":
+        # (Re)load all parameters from the preset:
+        if ps.orientation == "Landscape":
             ps.width_cm = dim_h
             ps.height_cm = dim_w
-        elif tipo != "custom" and ps.orientation == "Portrait":
+        elif ps.orientation == "Portrait":
             ps.width_cm = dim_w
             ps.height_cm = dim_h
-
-        ps.width_px = math.ceil((ps.width_cm * ps.dpi) / 2.54)
-        ps.height_px = math.ceil((ps.height_cm * ps.dpi) / 2.54)
+        # Update potentially outdated pixel values: 
+        ps.width_px = math.ceil((ps.width_cm * ps.dpi) / INCH_TO_CM)
+        ps.height_px = math.ceil((ps.height_cm * ps.dpi) / INCH_TO_CM)
+        
     else:
-        if tipo != "custom" and ps.orientation == "Landscape":
-            ps.width_cm = dim_h
-            ps.height_cm = dim_w
-            ps.width_px = math.ceil((ps.width_cm * ps.dpi) / 2.54)
-            ps.height_px = math.ceil((ps.height_cm * ps.dpi) / 2.54)
-        elif tipo != "custom" and ps.orientation == "Portrait":
-            ps.width_cm = dim_w
-            ps.height_cm = dim_h
-            ps.width_px = math.ceil((ps.width_cm * ps.dpi) / 2.54)
-            ps.height_px = math.ceil((ps.height_cm * ps.dpi) / 2.54)
-
-        ps.width_cm = (ps.width_px / ps.dpi) * 2.54
-        ps.height_cm = (ps.height_px / ps.dpi) * 2.54
+        #dim_w = ps.width_cm
+        #dim_h = ps.height_cm
+        if ps.unit_from == "CM_TO_PIXELS":
+            ps.width_px = math.ceil((ps.width_cm * ps.dpi) / INCH_TO_CM)
+            ps.height_px = math.ceil((ps.height_cm * ps.dpi) / INCH_TO_CM)
+        else: #PIXELS_TO_CM
+            ps.width_cm = (ps.width_px / ps.dpi) * INCH_TO_CM
+            ps.height_cm = (ps.height_px / ps.dpi) * INCH_TO_CM
 
 
 
@@ -610,6 +682,7 @@ class RENDER_PT_print(Panel):
         tipo = paper_presets_data[ps.preset][0]
 
         if tipo != "custom":
+            #ps.unit_from = 'CM_TO_PIXELS' TODO
             row.active = False
             row.enabled = False
 
