@@ -124,7 +124,14 @@ def update_settings_cb(self, context):
     # annoying workaround for recursive call
     if update_settings_cb.level == False:
         update_settings_cb.level = True
-        pixels_from_print(self)
+        ps = self
+        pixels_from_print(ps)
+        if ps.add_scale_ratio_text:
+            height_max = ps.width_cm / float(m2cm)
+            if ps.text_height > height_max:
+                ps.text_height = height_max
+            #elif ps.text_height < height_min:
+            #    ps.text_height = height_min
         update_settings_cb.level = False
 
 update_settings_cb.level = False
@@ -150,29 +157,29 @@ def print2scale_processInput(self, context):
     
     ps = self
     
-    if (print2scale_scale_factor_previous == ps.in_print2scale_scale_factor):
+    if (print2scale_scale_factor_previous == ps.scale_factor):
         return {'FINISHED'}
     
-    if (ps.in_print2scale_scale_factor < 1):
-        #ps.in_print2scale_scale_factor = round(ps.in_print2scale_scale_factor, 1)
-        print2scale_scale_factor_previous = ps.in_print2scale_scale_factor
+    if (ps.scale_factor < 1):
+        #ps.scale_factor = round(ps.scale_factor, 1)
+        print2scale_scale_factor_previous = ps.scale_factor
         return {'FINISHED'}
     
 
     # If the scale factor is changed by an amount less than 1 it has to be either incremented or
     # decremented and NOT rounded as this will result in the old result.
     # This special case is treated for convenience only.
-    if ps.in_print2scale_scale_factor > print2scale_scale_factor_previous:
+    if ps.scale_factor > print2scale_scale_factor_previous:
         #then round up:
-        ps.in_print2scale_scale_factor = math.ceil(ps.in_print2scale_scale_factor)
+        ps.scale_factor = math.ceil(ps.scale_factor)
         
-    elif ps.in_print2scale_scale_factor < print2scale_scale_factor_previous:
-       ps.in_print2scale_scale_factor = math.floor(ps.in_print2scale_scale_factor)
+    elif ps.scale_factor < print2scale_scale_factor_previous:
+       ps.scale_factor = math.floor(ps.scale_factor)
 
     #else: equal! nothing to change!
     
     # Store the current value for next time:
-    print2scale_scale_factor_previous = ps.in_print2scale_scale_factor
+    print2scale_scale_factor_previous = ps.scale_factor
 
 
 
@@ -240,7 +247,7 @@ class RenderPrintSettings(PropertyGroup):
             update=update_settings_cb,
             )
     #PRINT TO SCALE
-    in_print2scale = BoolProperty(
+    print_to_scale = BoolProperty(
             name="Print to scale"
             ,description="Print to scale by automatically calculate the correct distance of the camera to the object or the center of scene."
             ,default=True
@@ -275,8 +282,7 @@ class RenderPrintSettings(PropertyGroup):
     # (and from what reason ever (there are plenty!) don't take the unit scale into account correctly).
     # The loss of modularity is such a big problem that it's good to know that all this trouble can be avoided by simply modelling to scale.
     # (While model accuracy might prove inaccurate if modelling to scale without scaling up the model as the grids resolution is limited! So there is no silverbullet.)
-
-    in_print2scale_scale_factor = FloatProperty(
+    scale_factor = FloatProperty(
             name="Print scale factor"
             ,description="Scale big models down (scale factor <1) or tiny models up (scale facot >1). E.g. 10 results in scaling up tenfold, a 1meter model will fill 10m on a giant sheet of papyrus when printed out with this setting. On the other hand 0.1 = 1/10 results in a 1:10 plan being printed."
             ,default=1
@@ -285,13 +291,30 @@ class RenderPrintSettings(PropertyGroup):
             ,update=print2scale_recalculate_camera_focal_length_or_orthographic_scale
     )
     #cache_scale_ratio_text_object = None # ObjectProperty or ReferenceProperty
+    add_scale_ratio_text = BoolProperty(
+            name="Add scale ratio text."
+            ,description="Whether to add a text representation of the scale factor (as ratio) or not."
+            ,default=True
+            #,update=print2scale_reset_camera_focal_length_or_orthographic_scale
+    )
+    # Remapping probably will lead to much confusion. e.g. model 10 -> 1 on the plan means the output will be a model copy 10 times smaller.
+    # Many architects will accidentally fill in 1:10 instead because they forget that here the ratio is (model:plan) and not (plan:model) like printed
+    text_height = FloatProperty(
+            name="Text height."
+            ,description="Text height as printed. Given in Standard International units. Defaults to 1cm if zero."
+            ,default=.01 # m = 1cm = 10mm
+            ,min=0.0
+            ,max=100.0 # 100m is quite huge already, even for graffity.
+            #,update=ensure_height <- if text object is selected and active. 
+            ,update=update_settings_cb
+    )
 
             
 def print2scale(ps, context):
         #--------------------------------------------------------
         #print2scale
         #--------------------------------------------------------
-        if (ps.in_print2scale):
+        if (ps.print_to_scale):
             
             if (context.scene.objects.active != None and (context.scene.objects.active.type == 'OBJECT' or context.scene.objects.active.type == 'MESH')):
                 bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
@@ -340,13 +363,13 @@ def print2scale(ps, context):
                 # <=> Orthographic_scale = H_format_real / unit_settings_scale_length / scale_factor
                 #
                 #print('unit setting: ', context.scene.unit_settings.scale_length, ' longer_side in meters: ', longer_side)
-                context.scene.camera.data.ortho_scale = (longer_side / context.scene.unit_settings.scale_length) / ps.in_print2scale_scale_factor
+                context.scene.camera.data.ortho_scale = (longer_side / context.scene.unit_settings.scale_length) / ps.scale_factor
                 zoom_result = context.scene.camera.data.ortho_scale
                 
                 
             elif (context.scene.camera.data.type == 'PERSP'):
                 #TODO: somehow involve the location and the field of view!
-                context.scene.camera.data.focal_length = (longer_side / context.scene.unit_settings.scale_length) / ps.in_print2scale_scale_factor
+                context.scene.camera.data.focal_length = (longer_side / context.scene.unit_settings.scale_length) / ps.scale_factor
                 zoom_result = context.scene.camera.data.focal_length
 
             #else:
@@ -371,7 +394,7 @@ def print2scale(ps, context):
                     scale_ratio_text_object = o
                     break
             
-            if (not scale_ratio_text_object):  
+            if (not scale_ratio_text_object and ps.add_scale_ratio_text): 
                 # Add a text for the scale factor e.g. 1:10 on the print.
                 scale_ratio_text_object = add_text(context, object_name="scale_ratio")
                 # Scale the object to be visible depending on the chosen scale ratio
@@ -383,9 +406,9 @@ def print2scale(ps, context):
                 # It should be readable when printed out, thus the format/size (A4, A3, ..) must be read to know
                 # if setting it to 1/1000 of the space available will suffice. For A4
                 #object_scale = .01 * zoom_result  # figured by experimenting.
-                #text_object.scale.x = object_scale * ps.in_print2scale_scale_factor
-                #text_object.scale.y = object_scale * ps.in_print2scale_scale_factor
-                #text_object.scale.z = object_scale * ps.in_print2scale_scale_factor
+                #text_object.scale.x = object_scale * ps.scale_factor
+                #text_object.scale.y = object_scale * ps.scale_factor
+                #text_object.scale.z = object_scale * ps.scale_factor
                 
                 
                 ######
@@ -428,10 +451,23 @@ def print2scale(ps, context):
             
             #######
             # Update scale ratio factor:
-            scale_ratio_text = convertScaleFactorToRatioString(scale_factor=ps.in_print2scale_scale_factor);
-            change_text(context, scale_ratio_text_object, scale_ratio_text)
-            set_text_height(text_object=scale_ratio_text_object, print_settings=ps)
+            if scale_ratio_text_object and not ps.add_scale_ratio_text:
+                # Remove the text object:
+                #objects_to_be_deleted.append(scale_ratio_text_object)
+                bpy.ops.object.select_all(action='DESELECT')
+                context.scene.objects.active = scale_ratio_text_object
+                context.scene.objects.active.select = True
+                bpy.ops.object.delete()
+                return {'FINISHED'}
             
+            elif not scale_ratio_text_object:
+                print("Warning: No scale ratio text object.")
+                return {'FINISHED'}
+            
+            #else:
+            scale_ratio_text = convertScaleFactorToRatioString(scale_factor=ps.scale_factor);
+            change_text(context, scale_ratio_text_object, scale_ratio_text)
+            ensure_height(obj=scale_ratio_text_object, print_settings=ps)
             
             #######
             # Position in a corner. Note: It is extra complicated in PERSPECTIVE mode which is TODO.
@@ -456,13 +492,13 @@ def print2scale(ps, context):
             # Not to forget that the camera object's rotation is crucial as it influences the direction of the render
             # resolution x and y. So this is TODO if the parenting approach fails but it ain't (inheriting the camera
             # rotation is easiest).
-            x = (ps.width_cm / float(m2cm) / 2.0 - req_space_x - MARGIN_TO_EDGE) / ps.in_print2scale_scale_factor
-            y = (ps.height_cm / float(m2cm) / 2.0 - req_space_y - MARGIN_TO_EDGE) / ps.in_print2scale_scale_factor
+            x = (ps.width_cm / float(m2cm) / 2.0 - req_space_x - MARGIN_TO_EDGE) / ps.scale_factor
+            y = (ps.height_cm / float(m2cm) / 2.0 - req_space_y - MARGIN_TO_EDGE) / ps.scale_factor
             #TODO debug scale length. x = x / context.scene.unit_settings.scale_length
             #y = y / context.scene.unit_settings.scale_length
             # Because the camera's z axis points in the direction of the incoming rays, parenting and offsetting in negative Z direction is enough: 
             z = -.1 - req_space_z
-            #z = z / context.scene.unit_settings.scale_length / ps.in_print2scale_scale_factor
+            #z = z / context.scene.unit_settings.scale_length / ps.scale_factor
             scale_ratio_text_object.delta_location = (x, y, z)
             print('Scale Ratio Text Object.Delta Location: ' + str(scale_ratio_text_object.delta_location.x) + ', ' +  str(scale_ratio_text_object.delta_location.y) + ', ' + str(scale_ratio_text_object.delta_location.z) ) 
             
@@ -568,7 +604,7 @@ def add_text(context, text="", object_name="", print_settings=None):
     text_object.layers = list(LAYERS_ALL) # Copy to allow layer visibility changes affect only this object.
     # Note it's a constant and a reference at the same time if it's not copied using list(). Thus it should not be changed - and if then the side effect is that all objects that have LAYERS_ALL assigned, no longer show on all layers too.
     
-    #set_text_height(text_object=text_object, print_settings=print_settings)
+    #ensure_height(obj=text_object, print_settings=print_settings)
     
     # Add text. 
     if text:
@@ -578,40 +614,55 @@ def add_text(context, text="", object_name="", print_settings=None):
 
 
 
-def set_text_height(text_object, print_settings):
+#
+# Set dimension such that the given height is ensured on render/print out.
+# 
+# If no desired height is given, then constants are resolved.
+# If none are found, the print settings are evaluated for a text height.
+# If still no desired height could be determined, it defaults to .01 meter resulting height.
+def ensure_height(obj, print_settings, resulting_height=0.0):
     # Reset scale for the case the value was set to zero earlier (which leads to division by zero):
-    #text_object.scale.x = 1.0
-    #text_object.scale.y = 1.0
-    #text_object.scale.z = 1.0
-    
-    # EITHER
-    height_available = print_settings.width_cm / float(m2cm)
-    # speedier try: x except NameError: not exists else: exists.
-    if ('TEXT_SIZE_PERCENTAGE' in locals() or 'TEXT_SIZE_PERCENTAGE' in globals()) and TEXT_SIZE_PERCENTAGE:
-        target_height = height_available * TEXT_SIZE_PERCENTAGE / 100
-    # OR (Overrides the above if both height percentage and absolute value are given.)
-    elif not ('RESULTING_TEXT_HEIGHT' in locals() or 'RESULTING_TEXT_HEIGHT' in globals()) or not RESULTING_TEXT_HEIGHT:
-        print('WARNING: No text size defined, defaulting to .01m text height when printed out.')
-        RESULTING_TEXT_HEIGHT = .010 # meters = 1cm = 10mm
+    #obj.scale.x = 1.0
+    #obj.scale.y = 1.0
+    #obj.scale.z = 1.0
+    target_height = max(resulting_height, 0.0) # 0, i.e. invisible by default.
+    if resulting_height < 1:
+        # speedier try: x except NameError: not exists else: exists.
+        # EITHER
+        if ('TEXT_SIZE_PERCENTAGE' in locals() or 'TEXT_SIZE_PERCENTAGE' in globals()) and TEXT_SIZE_PERCENTAGE:
+            height_available = print_settings.width_cm / float(m2cm)
+            target_height = height_available * TEXT_SIZE_PERCENTAGE / 100
+        # OR (Overrides the above if both height percentage and absolute value are given.)
+        elif ('RESULTING_TEXT_HEIGHT' in locals() or 'RESULTING_TEXT_HEIGHT' in globals()) and RESULTING_TEXT_HEIGHT:
+            resulting_height = RESULTING_TEXT_HEIGHT
+        elif print_settings.text_height:
+            resulting_height = print_settings.text_height
+        else:
+            print('WARNING: No text size defined, defaulting to .01m text height when printed out.')
+            resulting_height = .010 # meters = 1cm = 10mm
+            
+    # TODO Support more text sizes, e.g. a GUI field for getting input.
+    if resulting_height:
+        target_height = resulting_height / print_settings.scale_factor
+    else:
+        print("Desired resulting height (as printed) is invalid: %s => Defaulting to 0, i.e. invisible." % resulting_height)
         
-    if RESULTING_TEXT_HEIGHT:
-        # TODO Support more text sizes.
-        target_height = RESULTING_TEXT_HEIGHT / print_settings.in_print2scale_scale_factor
-    
     # Assumption: text object's width is largest. Height is 2nd longest. Depth/thickness comes third.
     # TODO Figuring text height directly possible?
-    smallest_index, second_largest_index, largest_index = get_smallest_central_and_largest_from_3d_list(text_object)
+    smallest_index, second_largest_index, largest_index = get_smallest_central_and_largest_from_3d_list(obj)
     
-    object_text_height = text_object.dimensions[second_largest_index]
-    print(object_text_height, ' target height: ', target_height) 
+    object_height = obj.dimensions[second_largest_index]
+    print(object_height, ' target height: ', target_height) 
     # The height determines the scale factor, the other dimensions are scaled with the same factor to avoid distortion:
-    scale_factor = target_height / object_text_height
-    #target_dim = text_object.dimensions * scale_factor # Vector times scalar.
+    scale_factor = target_height / object_height
+    #target_dim = obj.dimensions * scale_factor # Vector times scalar.
     #scale_object_to_target_dimensions(target_dim=target_dim)
-    text_object.scale.x *= scale_factor
-    text_object.scale.y *= scale_factor
-    text_object.scale.z *= scale_factor
-    
+    obj.scale.x *= scale_factor
+    obj.scale.y *= scale_factor
+    obj.scale.z *= scale_factor
+    # Workaround scale not taking effect until mode was toggled:
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.mode_set(mode='OBJECT')
 
 
 
@@ -685,14 +736,21 @@ class RENDER_PT_print(Panel):
         #PRINT2SCALE
         row00 = layout.row(align=True)
         text = "Print to scale "
-        text = text + convertScaleFactorToRatioString(ps.in_print2scale_scale_factor)
+        text = text + convertScaleFactorToRatioString(ps.scale_factor)
          
-        row00.prop(ps, "in_print2scale", text=text)
+        row00.prop(ps, "print_to_scale", text=text)
         
-        row01 = layout.row(align=True)
-        row01.active = ps.in_print2scale
+        row = layout.row(align=True)
+        row.active = ps.print_to_scale
+        row.prop(ps, "scale_factor", text="Scale factor")
         
-        row01.prop(ps, "in_print2scale_scale_factor", text="Scale factor")
+        row = layout.row(align=True)
+        row.active = ps.print_to_scale
+        row.prop(ps, "add_scale_ratio_text", text="Add scale ratio text")
+        
+        row = layout.row(align=True)
+        row.active = ps.print_to_scale
+        row.prop(ps, "text_height", text="Text height")
         #PRINT2SCALE -END
 
 
@@ -775,6 +833,24 @@ class RENDER_PT_print(Panel):
 
 
 m2cm = 100
+
+class OBJECT_OT_text_change(Operator):
+    bl_idname = "object.text_change"
+    bl_label = "Change text."
+    bl_description = "Change the text of a text object."
+
+    def execute(self, context):#, text_object, text=""):
+        return change_text(context, text_object=context.scene.objects.active, text=context.scene.name)#<- HACK. TODO Solve properly. Maybe blender could add this as a built-in operator. Or use self.text if possible and reliable?)
+        
+
+class RENDER_OT_ensure_height(Operator):
+    bl_idname = "render.ensure_height"
+    bl_label = "Ensure a certain printed height."
+    bl_description = "Set the dimensions of a text object such that it is printed out in a certain height."
+
+    def execute(self, context):#, resulting_height, obj):
+        return ensure_height(obj=context.scene.objects.active, print_settings=context.scene.print_settings)
+    
 
 class RENDER_OT_apply_render2print_settings(Operator):
     bl_idname = "render.apply_render2print_settings"
