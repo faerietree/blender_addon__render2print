@@ -473,7 +473,8 @@ def print2scale(ps, context):
             # Position in a corner. Note: It is extra complicated in PERSPECTIVE mode which is TODO.
             #SPACE_PER_CHAR = 2
             # Extra margin also is required because dimensions of a text object can be smaller than the required space, because the center is a bit too far left because chars start farther to the right, e.g. a 1.
-            MARGIN_TO_EDGE = ps.width_cm / float(m2cm) / 10.0
+            MARGIN_TO_EDGE_HORIZONTAL = ps.width_cm / float(m2cm) / 10.0
+            MARGIN_TO_EDGE_VERTICAL = ps.height_cm / float(m2cm) / 10.0
             # x = camera origin.x (global) + render sizeX / 2 - space * number_of_characters
             smallest_index, second_largest_index, largest_index = get_smallest_central_and_largest_from_3d_list(scale_ratio_text_object)
             req_space_x = scale_ratio_text_object.dimensions[largest_index]# * zoom_result
@@ -492,8 +493,8 @@ def print2scale(ps, context):
             # Not to forget that the camera object's rotation is crucial as it influences the direction of the render
             # resolution x and y. So this is TODO if the parenting approach fails but it ain't (inheriting the camera
             # rotation is easiest).
-            x = (ps.width_cm / float(m2cm) / 2.0 - req_space_x - MARGIN_TO_EDGE) / ps.scale_factor
-            y = (ps.height_cm / float(m2cm) / 2.0 - req_space_y - MARGIN_TO_EDGE) / ps.scale_factor
+            x = (ps.width_cm / float(m2cm) / 2.0 - req_space_x - MARGIN_TO_EDGE_HORIZONTAL) / ps.scale_factor
+            y = (ps.height_cm / float(m2cm) / 2.0 - req_space_y - MARGIN_TO_EDGE_VERTICAL) / ps.scale_factor
             #TODO debug scale length. x = x / context.scene.unit_settings.scale_length
             #y = y / context.scene.unit_settings.scale_length
             # Because the camera's z axis points in the direction of the incoming rays, parenting and offsetting in negative Z direction is enough: 
