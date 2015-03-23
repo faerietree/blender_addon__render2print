@@ -311,17 +311,17 @@ class RenderPrintSettings(PropertyGroup):
     margin_top_bottom = FloatProperty(
             name="Vertical margin"
             ,description="Distance to top, bottom edges. Interpreted as percentage if >= 1."
-            ,default=10 # 10%
+            ,default=10 # 10%, greater than margin left right because the origin of text objects is in the object's bottom left corner by default.
             ,min=0.0
             ,max=100.0
     )
     margin_left_right = FloatProperty(
             name="Horizontal margin"
             ,description="Distance to left, right edges. Interpreted as percentage if >= 1."
-            ,default=10 # 10%
+            ,default=1 # 1%
             ,min=0.0
             ,max=100.0
-            #,update=position_in_a_corner <- requires parameters.
+            #,update=position_within_render <- requires parameters.
     )
 
 
@@ -484,21 +484,72 @@ def print2scale(ps, context):
             scale_ratio_text = convertScaleFactorToRatioString(scale_factor=ps.scale_factor);
             change_text(context, scale_ratio_text_object, scale_ratio_text)
             ensure_height(obj=scale_ratio_text_object, print_settings=ps)
-            position_in_a_corner(context, obj=scale_ratio_text_object, ps=ps)
+            #position_in_top_right_corner(context, obj=scale_ratio_text_object, ps=ps)
+            # for more flexibility let the margins be chosen freely:
+            position_within_render(context, obj=scale_ratio_text_object, ps=ps)
+            
             
 
 
-def position_in_a_corner(context, obj, ps):
+def position_in_top_left_corner(context, obj, ps):
+    margin_left_right_old = ps.margin_left_right
+    margin_top_bottom_old = ps.margin_top_bottom
+    ps.margin_left_right = 10
+    ps.margin_top_bottom = 10
+    #bpy.ops.object.position_within_render()
+    position_within_render(context, obj, ps)
+    ps.margin_left_right = margin_left_right_old
+    ps.margin_top_bottom = margin_top_bottom_old
+    
+    
+    
+def position_in_top_right_corner(context, obj, ps):
+    margin_left_right_old = ps.margin_left_right
+    margin_top_bottom_old = ps.margin_top_bottom
+    ps.margin_left_right = 90
+    ps.margin_top_bottom = 10
+    #bpy.ops.object.position_within_render()
+    position_within_render(context, obj, ps)
+    ps.margin_left_right = margin_left_right_old
+    ps.margin_top_bottom = margin_top_bottom_old
+    
+    
+    
+def position_in_bottom_right_corner(context, obj, ps):
+    margin_left_right_old = ps.margin_left_right
+    margin_top_bottom_old = ps.margin_top_bottom
+    ps.margin_left_right = 90
+    ps.margin_top_bottom = 90
+    #bpy.ops.object.position_within_render()
+    position_within_render(context, obj, ps)
+    ps.margin_left_right = margin_left_right_old
+    ps.margin_top_bottom = margin_top_bottom_old
+    
+    
+    
+def position_in_bottom_left_corner(context, obj, ps):
+    margin_left_right_old = ps.margin_left_right
+    margin_top_bottom_old = ps.margin_top_bottom
+    ps.margin_left_right = 10
+    ps.margin_top_bottom = 90
+    #bpy.ops.object.position_within_render()
+    position_within_render(context, obj, ps)
+    ps.margin_left_right = margin_left_right_old
+    ps.margin_top_bottom = margin_top_bottom_old
+    
+    
+    
+def position_within_render(context, obj, ps):
     #######
     # Position in a corner. Note: It is extra complicated in PERSPECTIVE mode which is TODO.
     #SPACE_PER_CHAR = 2
     # Extra margin also is required because dimensions of a text object can be smaller than the required space, because the center is a bit too far left because chars start farther to the right, e.g. a 1.
-    if ps.margin_left_right > 1.0: # interprete as percentage
+    if ps.margin_left_right >= 1.0: # interprete as percentage
         MARGIN_TO_EDGE_HORIZONTAL = ps.width_cm / float(m2cm) * ps.margin_left_right / 100
     else:
         MARGIN_TO_EDGE_HORIZONTAL = ps.margin_left_right / ps.scale_factor
         
-    if ps.margin_top_bottom > 1.0: # interprete as percentage
+    if ps.margin_top_bottom >= 1.0: # interprete as percentage
         MARGIN_TO_EDGE_VERTICAL = ps.height_cm / float(m2cm) * ps.margin_top_bottom / 100
     else:
         MARGIN_TO_EDGE_VERTICAL = ps.margin_top_bottom / ps.scale_factor
@@ -521,12 +572,18 @@ def position_in_a_corner(context, obj, ps):
     # Not to forget that the camera object's rotation is crucial as it influences the direction of the render
     # resolution x and y. So this is TODO if the parenting approach fails but it ain't (inheriting the camera
     # rotation is easiest).
-    x = (ps.width_cm / float(m2cm) / 2.0 - req_space_x - MARGIN_TO_EDGE_HORIZONTAL) / ps.scale_factor
-    y = (ps.height_cm / float(m2cm) / 2.0 - req_space_y - MARGIN_TO_EDGE_VERTICAL) / ps.scale_factor
+    x = (- ps.width_cm / float(m2cm) / 2.0 + req_space_x + MARGIN_TO_EDGE_HORIZONTAL)
+    y = (ps.height_cm / float(m2cm) / 2.0 - req_space_y - MARGIN_TO_EDGE_VERTICAL)
+    if ps.scale_factor > 1.0:
+        x /= ps.scale_factor
+        y /= ps.scale_factor
+    else:
+        x /= ps.scale_factor * 4
+        y /= ps.scale_factor
     #TODO debug scale length. x = x / context.scene.unit_settings.scale_length
     #y = y / context.scene.unit_settings.scale_length
     # Because the camera's z axis points in the direction of the incoming rays, parenting and offsetting in negative Z direction is enough: 
-    z = -.1 - req_space_z
+    z = -.1 - req_space_z # Along the camera's normal (Z) axis. (To move it out of the clipping minimum distance.)
     #z = z / context.scene.unit_settings.scale_length / ps.scale_factor
     obj.delta_location = (x, y, z)
     #print('Object.Delta Location: ' + str(obj.delta_location.x) + ', ' +  str(obj.delta_location.y) + ', ' + str(obj.delta_location.z) ) 
@@ -601,12 +658,13 @@ def change_text(context, text_object, text=""):
         bpy.ops.font.text_insert(text=text)
     else:
         print('Notice: Could not set scale ratio text representation because object appears to be no text/font object: ' + text_object)
-        
+    
     # Leave editmode to objectmode:
     #bpy.ops.object.editmode_toggle()
     bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
-    
-    
+    return {'FINISHED'}
+
+
 
 #
 # Adds text in a certain text/line height, aligned to the view.
@@ -876,6 +934,15 @@ class OBJECT_OT_text_change(Operator):
     def execute(self, context):#, text_object, text=""):
         return change_text(context, text_object=context.scene.objects.active, text=context.scene.name)#<- HACK. TODO Solve properly. Maybe blender could add this as a built-in operator. Or use self.text if possible and reliable?)
         
+    
+class OBJECT_OT_position_within_render(Operator):
+    bl_idname = "object.position_within_render"
+    bl_label = "Position within render"
+    bl_description = "Position within render, e.g. in a corner if margins are set as such."
+
+    def execute(self, context):#, text_object, text=""):
+        return position_within_render(context, text_object=context.scene.objects.active, text=context.scene.name)#<- HACK. TODO Solve properly. Maybe blender could add this as a built-in operator. Or use self.text if possible and reliable?)
+        
 
 class RENDER_OT_ensure_height(Operator):
     bl_idname = "render.ensure_height"
@@ -919,6 +986,9 @@ def getLastObjectInSelection(context):
 
 def register():
     bpy.utils.register_class(RENDER_OT_apply_render2print_settings)
+    bpy.utils.register_class(RENDER_OT_ensure_height)
+    bpy.utils.register_class(OBJECT_OT_text_change)
+    bpy.utils.register_class(OBJECT_OT_position_within_render)
     bpy.utils.register_class(RENDER_PT_print)
     bpy.utils.register_class(RenderPrintSettings)
 
@@ -927,6 +997,9 @@ def register():
 
 def unregister():
     bpy.utils.unregister_class(RENDER_OT_apply_render2print_settings)
+    bpy.utils.unregister_class(RENDER_OT_ensure_height)
+    bpy.utils.unregister_class(OBJECT_OT_text_change)
+    bpy.utils.unregister_class(OBJECT_OT_position_within_render)
     bpy.utils.unregister_class(RENDER_PT_print)
     bpy.utils.unregister_class(RenderPrintSettings)
     del Scene.print_settings
