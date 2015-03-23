@@ -308,6 +308,22 @@ class RenderPrintSettings(PropertyGroup):
             #,update=ensure_height <- if text object is selected and active. 
             ,update=update_settings_cb
     )
+    margin_top_bottom = FloatProperty(
+            name="Vertical margin"
+            ,description="Distance to top, bottom edges. Interpreted as percentage if >= 1."
+            ,default=10 # 10%
+            ,min=0.0
+            ,max=100.0
+    )
+    margin_left_right = FloatProperty(
+            name="Horizontal margin"
+            ,description="Distance to left, right edges. Interpreted as percentage if >= 1."
+            ,default=10 # 10%
+            ,min=0.0
+            ,max=100.0
+            #,update=position_in_a_corner <- requires parameters.
+    )
+
 
             
 def print2scale(ps, context):
@@ -468,49 +484,60 @@ def print2scale(ps, context):
             scale_ratio_text = convertScaleFactorToRatioString(scale_factor=ps.scale_factor);
             change_text(context, scale_ratio_text_object, scale_ratio_text)
             ensure_height(obj=scale_ratio_text_object, print_settings=ps)
+            position_in_a_corner(context, obj=scale_ratio_text_object, ps=ps)
             
-            #######
-            # Position in a corner. Note: It is extra complicated in PERSPECTIVE mode which is TODO.
-            #SPACE_PER_CHAR = 2
-            # Extra margin also is required because dimensions of a text object can be smaller than the required space, because the center is a bit too far left because chars start farther to the right, e.g. a 1.
-            MARGIN_TO_EDGE_HORIZONTAL = ps.width_cm / float(m2cm) / 10.0
-            MARGIN_TO_EDGE_VERTICAL = ps.height_cm / float(m2cm) / 10.0
-            # x = camera origin.x (global) + render sizeX / 2 - space * number_of_characters
-            smallest_index, second_largest_index, largest_index = get_smallest_central_and_largest_from_3d_list(scale_ratio_text_object)
-            req_space_x = scale_ratio_text_object.dimensions[largest_index]# * zoom_result
-            req_space_y = scale_ratio_text_object.dimensions[second_largest_index]# * zoom_result
-            req_space_z = scale_ratio_text_object.dimensions[smallest_index] / 2# * zoom_result
-            
-            print('font object dimensions: ' + str(scale_ratio_text_object.dimensions))
-            #    Camera -
-            #     | |   |
-            #    |   |  z
-            #   |     | |
-            #   |--x--| -   Assuming global Z-axis location is the greatest may not be always true.
-            # So better determine the biggest distance to scene's center first (I think this won't
-            # work without taking care of the camera's local/delta rotation)?
-            # Instead of scene center in this case it might be favourable to use all the objects' medians' median.
-            # Not to forget that the camera object's rotation is crucial as it influences the direction of the render
-            # resolution x and y. So this is TODO if the parenting approach fails but it ain't (inheriting the camera
-            # rotation is easiest).
-            x = (ps.width_cm / float(m2cm) / 2.0 - req_space_x - MARGIN_TO_EDGE_HORIZONTAL) / ps.scale_factor
-            y = (ps.height_cm / float(m2cm) / 2.0 - req_space_y - MARGIN_TO_EDGE_VERTICAL) / ps.scale_factor
-            #TODO debug scale length. x = x / context.scene.unit_settings.scale_length
-            #y = y / context.scene.unit_settings.scale_length
-            # Because the camera's z axis points in the direction of the incoming rays, parenting and offsetting in negative Z direction is enough: 
-            z = -.1 - req_space_z
-            #z = z / context.scene.unit_settings.scale_length / ps.scale_factor
-            scale_ratio_text_object.delta_location = (x, y, z)
-            print('Scale Ratio Text Object.Delta Location: ' + str(scale_ratio_text_object.delta_location.x) + ', ' +  str(scale_ratio_text_object.delta_location.y) + ', ' + str(scale_ratio_text_object.delta_location.z) ) 
-            
-            # TODO Remove once the delta position in combination with parenting isn't buggy anymore. This works around random object position (sometimes at least, which is weird too):
-            scale_ratio_text_object.parent_type = 'OBJECT'
-            bpy.ops.object.select_all(action='DESELECT')
-            context.scene.objects.active = scale_ratio_text_object
-            context.scene.objects.active.select = True
-            #bpy.ops.object.transform_apply(rotation=True)#, location=False, scale=False)
-            bpy.ops.object.rotation_clear()
-            
+
+
+def position_in_a_corner(context, obj, ps):
+    #######
+    # Position in a corner. Note: It is extra complicated in PERSPECTIVE mode which is TODO.
+    #SPACE_PER_CHAR = 2
+    # Extra margin also is required because dimensions of a text object can be smaller than the required space, because the center is a bit too far left because chars start farther to the right, e.g. a 1.
+    if ps.margin_left_right > 1.0: # interprete as percentage
+        MARGIN_TO_EDGE_HORIZONTAL = ps.width_cm / float(m2cm) * ps.margin_left_right / 100
+    else:
+        MARGIN_TO_EDGE_HORIZONTAL = ps.margin_left_right / ps.scale_factor
+        
+    if ps.margin_top_bottom > 1.0: # interprete as percentage
+        MARGIN_TO_EDGE_VERTICAL = ps.height_cm / float(m2cm) * ps.margin_top_bottom / 100
+    else:
+        MARGIN_TO_EDGE_VERTICAL = ps.margin_top_bottom / ps.scale_factor
+    
+    # x = camera origin.x (global) + render sizeX / 2 - space * number_of_characters
+    smallest_index, second_largest_index, largest_index = get_smallest_central_and_largest_from_3d_list(obj)
+    req_space_x = obj.dimensions[largest_index]# * zoom_result
+    req_space_y = obj.dimensions[second_largest_index]# * zoom_result
+    req_space_z = obj.dimensions[smallest_index] / 2# * zoom_result
+    #print('Object dimensions: ' + str(obj.dimensions))
+    
+    #    Camera -
+    #     | |   |
+    #    |   |  z
+    #   |     | |
+    #   |--x--| -   Assuming global Z-axis location is the greatest may not be always true.
+    # So better determine the biggest distance to scene's center first (I think this won't
+    # work without taking care of the camera's local/delta rotation)?
+    # Instead of scene center in this case it might be favourable to use all the objects' medians' median.
+    # Not to forget that the camera object's rotation is crucial as it influences the direction of the render
+    # resolution x and y. So this is TODO if the parenting approach fails but it ain't (inheriting the camera
+    # rotation is easiest).
+    x = (ps.width_cm / float(m2cm) / 2.0 - req_space_x - MARGIN_TO_EDGE_HORIZONTAL) / ps.scale_factor
+    y = (ps.height_cm / float(m2cm) / 2.0 - req_space_y - MARGIN_TO_EDGE_VERTICAL) / ps.scale_factor
+    #TODO debug scale length. x = x / context.scene.unit_settings.scale_length
+    #y = y / context.scene.unit_settings.scale_length
+    # Because the camera's z axis points in the direction of the incoming rays, parenting and offsetting in negative Z direction is enough: 
+    z = -.1 - req_space_z
+    #z = z / context.scene.unit_settings.scale_length / ps.scale_factor
+    obj.delta_location = (x, y, z)
+    #print('Object.Delta Location: ' + str(obj.delta_location.x) + ', ' +  str(obj.delta_location.y) + ', ' + str(obj.delta_location.z) ) 
+    
+    # TODO Remove once the delta position in combination with parenting isn't buggy anymore. This works around random object position (sometimes at least, which is weird too):
+    obj.parent_type = 'OBJECT'
+    bpy.ops.object.select_all(action='DESELECT')
+    context.scene.objects.active = obj 
+    context.scene.objects.active.select = True
+    bpy.ops.object.transform_apply(rotation=True)#, location=False, scale=False)
+    bpy.ops.object.rotation_clear()
 
 
 
@@ -752,6 +779,12 @@ class RENDER_PT_print(Panel):
         row = layout.row(align=True)
         row.active = ps.print_to_scale
         row.prop(ps, "text_height", text="Text height")
+        
+        row = layout.row(align=True)
+        row.active = ps.print_to_scale
+        row.label("Margins:")
+        row.prop(ps, "margin_left_right", text="Margin left, right.")
+        row.prop(ps, "margin_top_bottom", text="Margin top, bottom.")
         #PRINT2SCALE -END
 
 
