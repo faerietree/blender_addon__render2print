@@ -491,55 +491,66 @@ def print2scale(ps, context):
             
 
 
-def position_in_top_left_corner(context, obj, ps):
+def position_in_top_left_corner(context, obj=None, ps=None):
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
     ps.margin_left_right = 10
     ps.margin_top_bottom = 10
     #bpy.ops.object.position_within_render()
-    position_within_render(context, obj, ps)
+    result = position_within_render(context, obj, ps)
     ps.margin_left_right = margin_left_right_old
     ps.margin_top_bottom = margin_top_bottom_old
+    return result
     
     
     
-def position_in_top_right_corner(context, obj, ps):
+def position_in_top_right_corner(context, obj=None, ps=None):
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
     ps.margin_left_right = 90
     ps.margin_top_bottom = 10
     #bpy.ops.object.position_within_render()
-    position_within_render(context, obj, ps)
+    result = position_within_render(context, obj, ps)
     ps.margin_left_right = margin_left_right_old
     ps.margin_top_bottom = margin_top_bottom_old
+    return result
     
     
     
-def position_in_bottom_right_corner(context, obj, ps):
+def position_in_bottom_right_corner(context, obj=None, ps=None):
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
     ps.margin_left_right = 90
     ps.margin_top_bottom = 90
     #bpy.ops.object.position_within_render()
-    position_within_render(context, obj, ps)
+    result = position_within_render(context, obj, ps)
     ps.margin_left_right = margin_left_right_old
     ps.margin_top_bottom = margin_top_bottom_old
+    return result
     
     
     
-def position_in_bottom_left_corner(context, obj, ps):
+def position_in_bottom_left_corner(context, obj=None, ps=None):
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
     ps.margin_left_right = 10
     ps.margin_top_bottom = 90
     #bpy.ops.object.position_within_render()
-    position_within_render(context, obj, ps)
+    result = position_within_render(context, obj, ps)
     ps.margin_left_right = margin_left_right_old
     ps.margin_top_bottom = margin_top_bottom_old
+    return result
     
     
     
-def position_within_render(context, obj, ps):
+def position_within_render(context, obj=None, ps=None):
+    print('Positioning within render ...')
+    if not obj:
+        obj = context.scene.objects.active
+    if not obj:
+        return {'CANCELLED'}
+    if not ps:
+        ps = context.scene.print_settings
     #######
     # Position in a corner. Note: It is extra complicated in PERSPECTIVE mode which is TODO.
     #SPACE_PER_CHAR = 2
@@ -555,7 +566,7 @@ def position_within_render(context, obj, ps):
         MARGIN_TO_EDGE_VERTICAL = ps.margin_top_bottom / ps.scale_factor
     
     # x = camera origin.x (global) + render sizeX / 2 - space * number_of_characters
-    smallest_index, second_largest_index, largest_index = get_smallest_central_and_largest_from_3d_list(obj)
+    smallest_index, second_largest_index, largest_index = get_smallest_central_and_largest(obj.dimensions)
     req_space_x = obj.dimensions[largest_index]# * zoom_result
     req_space_y = obj.dimensions[second_largest_index]# * zoom_result
     req_space_z = obj.dimensions[smallest_index] / 2# * zoom_result
@@ -595,14 +606,15 @@ def position_within_render(context, obj, ps):
     context.scene.objects.active.select = True
     bpy.ops.object.transform_apply(rotation=True)#, location=False, scale=False)
     bpy.ops.object.rotation_clear()
+    return {'FINISHED'}
 
 
 
-def get_smallest_central_and_largest_from_3d_list(obj):
-    x = obj.dimensions[0]
-    y = obj.dimensions[1]
-    z = obj.dimensions[2]
-    print(obj.dimensions)
+def get_smallest_central_and_largest(vector_3d):
+    x = vector_3d[0]
+    y = vector_3d[1]
+    z = vector_3d[2]
+    print(vector_3d)
     # By default it is assumed that the text is looked onto directly from positive Z axis towards negative Z axis.
     second_largest_index = 0
     largest_index = 2
@@ -735,7 +747,7 @@ def ensure_height(obj, print_settings, resulting_height=0.0):
         
     # Assumption: text object's width is largest. Height is 2nd longest. Depth/thickness comes third.
     # TODO Figuring text height directly possible?
-    smallest_index, second_largest_index, largest_index = get_smallest_central_and_largest_from_3d_list(obj)
+    smallest_index, second_largest_index, largest_index = get_smallest_central_and_largest(obj.dimensions)
     
     object_height = obj.dimensions[second_largest_index]
     print(object_height, ' target height: ', target_height) 
@@ -935,14 +947,56 @@ class OBJECT_OT_text_change(Operator):
         return change_text(context, text_object=context.scene.objects.active, text=context.scene.name)#<- HACK. TODO Solve properly. Maybe blender could add this as a built-in operator. Or use self.text if possible and reliable?)
         
     
+    
 class OBJECT_OT_position_within_render(Operator):
     bl_idname = "object.position_within_render"
     bl_label = "Position within render"
     bl_description = "Position within render, e.g. in a corner if margins are set as such."
 
     def execute(self, context):#, text_object, text=""):
-        return position_within_render(context, text_object=context.scene.objects.active, text=context.scene.name)#<- HACK. TODO Solve properly. Maybe blender could add this as a built-in operator. Or use self.text if possible and reliable?)
+        return position_within_render(context)
         
+    
+    
+class OBJECT_OT_position_in_top_left_corner(Operator):
+    bl_idname = "object.position_in_top_left_corner"
+    bl_label = "Position in top left corner."
+    bl_description = "Position within render, in the top left corner."
+
+    def execute(self, context):#, text_object, text=""):
+        return position_in_top_left_corner(context)
+        
+    
+    
+class OBJECT_OT_position_in_top_right_corner(Operator):
+    bl_idname = "object.position_in_top_right_corner"
+    bl_label = "Position in top right corner."
+    bl_description = "Position within render, in the top right corner."
+
+    def execute(self, context):#, text_object, text=""):
+        return position_in_top_right_corner(context)
+    
+    
+    
+class OBJECT_OT_position_in_bottom_right_corner(Operator):
+    bl_idname = "object.position_in_bottom_right_corner"
+    bl_label = "Position in bottom right corner."
+    bl_description = "Position within render, in the bottom right corner."
+
+    def execute(self, context):#, text_object, text=""):
+        return position_in_bottom_right_corner(context)
+    
+    
+    
+class OBJECT_OT_position_in_bottom_left_corner(Operator):
+    bl_idname = "object.position_in_bottom_left_corner"
+    bl_label = "Position in bottom left corner."
+    bl_description = "Position within render, in the bottom left corner."
+
+    def execute(self, context):#, text_object, text=""):
+        return position_in_bottom_left_corner(context)
+    
+    
 
 class RENDER_OT_ensure_height(Operator):
     bl_idname = "render.ensure_height"
@@ -951,6 +1005,7 @@ class RENDER_OT_ensure_height(Operator):
 
     def execute(self, context):#, resulting_height, obj):
         return ensure_height(obj=context.scene.objects.active, print_settings=context.scene.print_settings)
+    
     
 
 class RENDER_OT_apply_render2print_settings(Operator):
@@ -989,6 +1044,10 @@ def register():
     bpy.utils.register_class(RENDER_OT_ensure_height)
     bpy.utils.register_class(OBJECT_OT_text_change)
     bpy.utils.register_class(OBJECT_OT_position_within_render)
+    bpy.utils.register_class(OBJECT_OT_position_in_top_left_corner)
+    bpy.utils.register_class(OBJECT_OT_position_in_top_right_corner)
+    bpy.utils.register_class(OBJECT_OT_position_in_bottom_right_corner)
+    bpy.utils.register_class(OBJECT_OT_position_in_bottom_left_corner)
     bpy.utils.register_class(RENDER_PT_print)
     bpy.utils.register_class(RenderPrintSettings)
 
@@ -1000,6 +1059,10 @@ def unregister():
     bpy.utils.unregister_class(RENDER_OT_ensure_height)
     bpy.utils.unregister_class(OBJECT_OT_text_change)
     bpy.utils.unregister_class(OBJECT_OT_position_within_render)
+    bpy.utils.unregister_class(OBJECT_OT_position_in_top_left_corner)
+    bpy.utils.unregister_class(OBJECT_OT_position_in_top_right_corner)
+    bpy.utils.unregister_class(OBJECT_OT_position_in_bottom_right_corner)
+    bpy.utils.unregister_class(OBJECT_OT_position_in_bottom_left_corner)
     bpy.utils.unregister_class(RENDER_PT_print)
     bpy.utils.unregister_class(RenderPrintSettings)
     del Scene.print_settings
