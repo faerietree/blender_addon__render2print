@@ -436,19 +436,7 @@ def print2scale(ps, context):
                 set_camera_as_parent = True
                 
             if scale_ratio_text_object and set_camera_as_parent:
-                ######
-                # PARENT TO CAMERA
-                ######
-                # Make sure nothing is selected:
-                bpy.ops.object.select_all(action='DESELECT')
-                
-                # Select the to-be-child objects:
-                scale_ratio_text_object.select = True
-                # Select the to-be-parent object and make active:
-                context.scene.camera.select = True
-                context.scene.objects.active = context.scene.camera
-                
-                bpy.ops.object.parent_set(type='OBJECT', keep_transform=False)
+                set_parent(context, to_be_child_objects=[scale_ratio_text_object], parent_object=context.scene.camera)
                 
                 ######
                 # ADD TRACK TO CONSTRAINT (enable and debug if parenting approach above fails)
@@ -496,7 +484,25 @@ def print2scale(ps, context):
             # for more flexibility let the margins be chosen freely:
             position_within_render(context, obj=scale_ratio_text_object, ps=ps)
             
-            
+
+
+def set_parent(context, to_be_child_objects, parent_object):
+    ######
+    # PARENT TO CAMERA
+    ######
+    # Make sure nothing is selected:
+    bpy.ops.object.select_all(action='DESELECT')
+    
+    # Select the to-be-child objects:
+    for o in to_be_child_objects:
+        o.select = True
+    
+    # Select the to-be-parent object and make active:
+    parent_object.select = True
+    context.scene.objects.active = parent_object
+    
+    bpy.ops.object.parent_set(type='OBJECT', keep_transform=False)
+
 
 
 def position_in_top_left_corner(context, obj=None, ps=None):
@@ -560,6 +566,9 @@ def position_within_render(context, obj=None, ps=None):
         return {'CANCELLED'}
     if not ps:
         ps = context.scene.print_settings
+        
+    ensure_height(obj=obj, print_settings=ps)
+    
     #######
     # Position in a corner. Note: It is extra complicated in PERSPECTIVE mode which is TODO.
     #SPACE_PER_CHAR = 2
@@ -613,6 +622,11 @@ def position_within_render(context, obj=None, ps=None):
     obj.delta_location = (x, y, z)
     #print('Object.Delta Location: ' + str(obj.delta_location.x) + ', ' +  str(obj.delta_location.y) + ', ' + str(obj.delta_location.z) ) 
     
+    # Set camera as parent if necessary:
+    if not obj.parent:
+       set_parent(context, to_be_child_objects=[obj], parent_object=context.scene.camera)
+    elif obj.parent.type != 'CAMERA':
+        print("obj: ", obj, " shall be positioned within render area, but does have another object assigned as parent: ", obj.parent)
     # TODO Remove once the delta position in combination with parenting isn't buggy anymore. This works around random object position (sometimes at least, which is weird too):
     obj.parent_type = 'OBJECT'
     bpy.ops.object.select_all(action='DESELECT')
