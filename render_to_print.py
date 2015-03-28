@@ -567,12 +567,12 @@ def position_within_render(context, obj=None, ps=None):
     if ps.margin_left_right >= 1.0: # interprete as percentage
         MARGIN_TO_EDGE_HORIZONTAL = ps.width_cm / float(m2cm) * ps.margin_left_right / 100
     else:
-        MARGIN_TO_EDGE_HORIZONTAL = ps.margin_left_right / ps.scale_factor
+        MARGIN_TO_EDGE_HORIZONTAL = ps.margin_left_right
         
     if ps.margin_top_bottom >= 1.0: # interprete as percentage
         MARGIN_TO_EDGE_VERTICAL = ps.height_cm / float(m2cm) * ps.margin_top_bottom / 100
     else:
-        MARGIN_TO_EDGE_VERTICAL = ps.margin_top_bottom / ps.scale_factor
+        MARGIN_TO_EDGE_VERTICAL = ps.margin_top_bottom
    
     #MARGIN_TO_EDGE_VERTICAL /= ps.scale_factor
     #MARGIN_TO_EDGE_HORIZONTAL /= ps.scale_factor
@@ -597,11 +597,11 @@ def position_within_render(context, obj=None, ps=None):
     # Not to forget that the camera object's rotation is crucial as it influences the direction of the render
     # resolution x and y. So this is TODO if the parenting approach fails but it ain't (inheriting the camera
     # rotation is easiest).
-    x = - ps.width_cm / float(m2cm) / 2.0 + MARGIN_TO_EDGE_HORIZONTAL# + req_space_x removed because the text object's origin is in top left corner by default. TODO Re-activate if this should ever change in blender.
-    y = ps.height_cm / float(m2cm) / 2.0 - req_space_y - MARGIN_TO_EDGE_VERTICAL
-    if ps.scale_factor >= 1.0:
-        x /= ps.scale_factor
-        y /= ps.scale_factor
+    x = - ps.width_cm / float(m2cm) / 2.0 + MARGIN_TO_EDGE_HORIZONTAL# + req_space_x * ps.scale_factor removed because the text object's origin is in top left corner by default. TODO Re-activate if this should ever change in blender.
+    y = ps.height_cm / float(m2cm) / 2.0 - req_space_y * ps.scale_factor - MARGIN_TO_EDGE_VERTICAL
+    #if ps.scale_factor >= 1.0:
+    x /= ps.scale_factor
+    y /= ps.scale_factor
     #elif ps.scale_factor < 1.0:
     #    x /= ps.scale_factor * 4
     #    y /= ps.scale_factor
