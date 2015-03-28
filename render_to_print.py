@@ -409,8 +409,16 @@ def print2scale(ps, context):
                 if (o and o.type == 'FONT' and o.name.find('scale_ratio') != -1):
                     scale_ratio_text_object = o
                     break
+            set_camera_as_parent = False
+            if not scale_ratio_text_object:
+                for o in context.scene.objects:
+                    # to allow other text/font objects as camera children, check for scale_ratio too:
+                    if (o and o.type == 'FONT' and o.name.find('scale_ratio') != -1):
+                        scale_ratio_text_object = o
+                        set_camera_as_parent = True # because it's not yet been parented.
+                        break
             
-            if (not scale_ratio_text_object and ps.add_scale_ratio_text): 
+            if (not scale_ratio_text_object and ps.add_scale_ratio_text):
                 # Add a text for the scale factor e.g. 1:10 on the print.
                 scale_ratio_text_object = add_text(context, object_name="scale_ratio")
                 # Scale the object to be visible depending on the chosen scale ratio
@@ -425,8 +433,9 @@ def print2scale(ps, context):
                 #text_object.scale.x = object_scale * ps.scale_factor
                 #text_object.scale.y = object_scale * ps.scale_factor
                 #text_object.scale.z = object_scale * ps.scale_factor
+                set_camera_as_parent = True
                 
-                
+            if scale_ratio_text_object and set_camera_as_parent:
                 ######
                 # PARENT TO CAMERA
                 ######
@@ -440,7 +449,6 @@ def print2scale(ps, context):
                 context.scene.objects.active = context.scene.camera
                 
                 bpy.ops.object.parent_set(type='OBJECT', keep_transform=False)
-                
                 
                 ######
                 # ADD TRACK TO CONSTRAINT (enable and debug if parenting approach above fails)
@@ -604,7 +612,7 @@ def position_within_render(context, obj=None, ps=None):
     bpy.ops.object.select_all(action='DESELECT')
     context.scene.objects.active = obj 
     context.scene.objects.active.select = True
-    bpy.ops.object.transform_apply(rotation=True)#, location=False, scale=False)
+    #bpy.ops.object.transform_apply(rotation=True)#, location=False, scale=False)
     bpy.ops.object.rotation_clear()
     return {'FINISHED'}
 
@@ -652,6 +660,10 @@ def get_smallest_central_and_largest(vector_3d):
 # By default clears the text to an empty string.
 #
 def change_text(context, text_object, text=""):
+    if not text_object:
+        print('No text object: ', text_object)
+    if not context:
+        print('No context: ', context)
     
     # Make sure nothing is selected:
     #if len(context.selected_objects) > 0: complains about context.
@@ -662,8 +674,9 @@ def change_text(context, text_object, text=""):
     
     # Enter edit mode:
     bpy.ops.object.mode_set(mode='EDIT', toggle=False)
-    
-    if (text_object.type == 'FONT'):
+    if (not text_object.is_visible):
+        print("Notice: Could not change text of text object because the object isn't visible currently.")
+    elif (text_object.type == 'FONT'):
         bpy.ops.font.select_all()
         bpy.ops.font.text_cut()
         print('setting text: ' + text)
@@ -702,7 +715,7 @@ def add_text(context, text="", object_name="", print_settings=None):
     text_object.layers = list(LAYERS_ALL) # Copy to allow layer visibility changes affect only this object.
     # Note it's a constant and a reference at the same time if it's not copied using list(). Thus it should not be changed - and if then the side effect is that all objects that have LAYERS_ALL assigned, no longer show on all layers too.
     
-    #ensure_height(obj=text_object, print_settings=print_settings)
+    ensure_height(obj=text_object, print_settings=print_settings)# <- TODO Maybe not enforce the same height currently. Instead, the calling function should be responsible?
     
     # Add text. 
     if text:
