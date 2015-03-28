@@ -341,7 +341,7 @@ def print2scale(ps, context):
                 
             if (context.scene.camera is None):
                 # Create a camera:
-                bpy.ops.object.add('CAMERA', layers=LAYERS_ALL)
+                bpy.ops.object.add('CAMERA', layers=list(LAYERS_ALL))
                 ##the added object keeps the short name, while the others are renamed
                 #context.scene.selected_object['Camera']
             #
@@ -487,6 +487,12 @@ def print2scale(ps, context):
 
 
 def set_parent(context, to_be_child_objects, parent_object):
+    
+    ######
+    # ENSURE CAMERA IS ON ALL LAYERS AS MOST OPERATORS CHECK THIS IN THE CONTEXT POLL FUNCTION.
+    ######
+    context.scene.camera.layers = list(LAYERS_ALL)
+    
     ######
     # PARENT TO CAMERA
     ######
@@ -567,7 +573,7 @@ def position_within_render(context, obj=None, ps=None):
     if not ps:
         ps = context.scene.print_settings
         
-    ensure_height(obj=obj, print_settings=ps)
+    #Introduces bugs easily if margin is derived from initial object dimensions:ensure_height(obj=obj, print_settings=ps)
     
     #######
     # Position in a corner. Note: It is extra complicated in PERSPECTIVE mode which is TODO.
@@ -740,7 +746,7 @@ def add_text(context, text="", object_name="", print_settings=None):
     # Add text. 
     if text:
         change_text(context, text_object, text)
-   
+        
     return text_object
 
 
@@ -794,7 +800,8 @@ def ensure_height(obj, print_settings, resulting_height=0.0):
     # Workaround scale not taking effect until mode was toggled:
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.object.mode_set(mode='OBJECT')
-
+    
+    return {'FINISHED'}
 
 
 def convertScaleFactorToRatioString(scale_factor, precision=2):
