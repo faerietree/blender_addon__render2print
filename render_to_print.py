@@ -596,10 +596,34 @@ def position_within_render(context, obj=None, ps=None):
 
     # x = camera origin.x (global) + render sizeX / 2 - space * number_of_characters
     smallest_index, second_largest_index, largest_index = get_smallest_central_and_largest(obj.dimensions)
-    req_space_x = obj.dimensions[largest_index]# * zoom_result
-    req_space_y = obj.dimensions[second_largest_index]# * zoom_result
-    req_space_z = obj.dimensions[smallest_index] / 2# * zoom_result
+    req_space_x = obj.dimensions[largest_index] / 2.0# * zoom_result
+    req_space_y = obj.dimensions[second_largest_index] / 2.0# * zoom_result
+    req_space_z = obj.dimensions[smallest_index] / 2.0# * zoom_result
     #print('Object dimensions: ' + str(obj.dimensions))
+    
+    # Allow to restore the initial origin later: (NOTE This depends on the blender functionality that setting the origin maintains the position.)
+    #TODO Determine why poll function fails:
+    #bpy.ops.view3d.snap_cursor_to_active()
+    #origin_old = context.scene.cursor_location
+    
+    # TODO Correct the wrong math, to allow for reusing blender functionality.
+    p = obj.parent
+    if p:
+        bpy.ops.object.parent_clear(type='CLEAR')
+    origin_old = obj.location + obj.delta_location#TODO Calc rotation matrix from obj.rotation_* # because origin_set influences location only.
+    location_old = obj.location.copy()
+    delta_location_old = obj.delta_location.copy()
+    print("origin_old: ", origin_old)
+    #if not p:
+    #    # No parent => Use the camera as this is the soon to be parent.
+    #    p = context.scene.camera
+    #origin_old = p.location + obj.location * p.matrix_world + obj.delta_location * obj.matrix_world * p.matrix_world
+    bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY')#, center='BOUNDS')
+    # Create a delta, such that the missing parent information doesn't matter:
+    origin_delta = obj.location - location_old
+    #origin_new = obj.location + obj.delta_location
+    #origin_delta = origin_new - origin_old
+    
     
     #    Camera -
     #     | |   |
@@ -612,7 +636,7 @@ def position_within_render(context, obj=None, ps=None):
     # Not to forget that the camera object's rotation is crucial as it influences the direction of the render
     # resolution x and y. So this is TODO if the parenting approach fails but it ain't (inheriting the camera
     # rotation is easiest).
-    x = - ps.width_cm / float(m2cm) / 2.0 + MARGIN_TO_EDGE_HORIZONTAL# + req_space_x * ps.scale_factor removed because the text object's origin is in top left corner by default. TODO Re-activate if this should ever change in blender.
+    x = - ps.width_cm / float(m2cm) / 2.0 + MARGIN_TO_EDGE_HORIZONTAL + req_space_x * ps.scale_factor # Because the object's origin is moved to the center explicitely.
     y = ps.height_cm / float(m2cm) / 2.0 - req_space_y * ps.scale_factor - MARGIN_TO_EDGE_VERTICAL
     #if ps.scale_factor >= 1.0:
     x /= ps.scale_factor
@@ -628,6 +652,26 @@ def position_within_render(context, obj=None, ps=None):
     obj.delta_location = (x, y, z)
     #print('Object.Delta Location: ' + str(obj.delta_location.x) + ', ' +  str(obj.delta_location.y) + ', ' + str(obj.delta_location.z) ) 
     
+    
+    # Restore the original origin, maintaining the overall location:
+    #origin_new = obj.location + obj.delta_location #TODO Rotation.
+    ##if obj.parent: # should have a parent object (camera).
+    #origin_new = origin_new + obj.parent.location
+    #origin_old_relative = origin_old - origin_new # tip - foot 
+    #context.scene.cursor_location = origin_old
+    #context.scene.cursor_location += origin_delta
+    #context.scene.cursor_location = origin_new - origin_delta # valid, because the parent object was cleared.
+    delta_location_delta = obj.delta_location - delta_location_old
+    cursor_location_old = context.scene.cursor_location.copy()
+    context.scene.cursor_location = origin_old + delta_location_delta # valid, because the parent object was cleared
+    #raise Error
+    bpy.ops.object.origin_set(type='ORIGIN_CURSOR')#, center='BOUNDS')
+    context.scene.cursor_location = cursor_location_old
+    
+    # Adapt the delta location to take the origin offset into account:
+    obj.delta_location -= origin_delta
+    
+    
     # Set camera as parent if necessary:
     if not obj.parent:
        set_parent(context, to_be_child_objects=[obj], parent_object=context.scene.camera)
@@ -640,6 +684,9 @@ def position_within_render(context, obj=None, ps=None):
     context.scene.objects.active.select = True
     #bpy.ops.object.transform_apply(rotation=True)#, location=False, scale=False)
     bpy.ops.object.rotation_clear()
+    
+    #context.scene.cursor_location = obj.parent.location + obj.parent.delta_location + (origin_old + delta_location_delta) * obj.matrix_parent_inverse # valid, because the parent object was cleared.
+    
     return {'FINISHED'}
 
 
