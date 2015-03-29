@@ -302,7 +302,7 @@ class RenderPrintSettings(PropertyGroup):
     text_height = FloatProperty(
             name="Text height."
             ,description="Text height as printed. Given in Standard International units. Defaults to 1cm if zero."
-            ,default=.01 # m = 1cm = 10mm
+            ,default=.005 # m = .5cm = 5mm
             ,min=0.0
             ,max=100.0 # 100m is quite huge already, even for graffity.
             #,update=ensure_height <- if text object is selected and active. 
@@ -311,7 +311,7 @@ class RenderPrintSettings(PropertyGroup):
     margin_top_bottom = FloatProperty(
             name="Vertical margin"
             ,description="Distance to top, bottom edges. Interpreted as percentage if >= 1."
-            ,default=10 # 10%, greater than margin left right because the origin of text objects is in the object's bottom left corner by default.
+            ,default=1 # 1%
             ,min=0.0
             ,max=100.0
     )
