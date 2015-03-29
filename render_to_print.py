@@ -512,6 +512,8 @@ def set_parent(context, to_be_child_objects, parent_object):
 
 
 def position_in_top_left_corner(context, obj=None, ps=None):
+    if not ps:
+        ps = context.scene.print_settings
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
     ps.margin_left_right = 10
@@ -525,6 +527,8 @@ def position_in_top_left_corner(context, obj=None, ps=None):
     
     
 def position_in_top_right_corner(context, obj=None, ps=None):
+    if not ps:
+        ps = context.scene.print_settings
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
     ps.margin_left_right = 90
@@ -538,6 +542,8 @@ def position_in_top_right_corner(context, obj=None, ps=None):
     
     
 def position_in_bottom_right_corner(context, obj=None, ps=None):
+    if not ps:
+        ps = context.scene.print_settings
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
     ps.margin_left_right = 90
@@ -551,6 +557,8 @@ def position_in_bottom_right_corner(context, obj=None, ps=None):
     
     
 def position_in_bottom_left_corner(context, obj=None, ps=None):
+    if not ps:
+        ps = context.scene.print_settings
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
     ps.margin_left_right = 10
@@ -573,6 +581,8 @@ def position_within_render(context, obj=None, ps=None):
     if not ps:
         ps = context.scene.print_settings
         
+    rendersettings = context.scene.render
+
     #Introduces bugs easily if margin is derived from initial object dimensions:ensure_height(obj=obj, print_settings=ps)
     
     #######
@@ -580,12 +590,12 @@ def position_within_render(context, obj=None, ps=None):
     #SPACE_PER_CHAR = 2
     # Extra margin also is required because dimensions of a text object can be smaller than the required space, because the center is a bit too far left because chars start farther to the right, e.g. a 1.
     if ps.margin_left_right >= 1.0: # interprete as percentage
-        MARGIN_TO_EDGE_HORIZONTAL = ps.width_cm / float(m2cm) * ps.margin_left_right / 100
+        MARGIN_TO_EDGE_HORIZONTAL = rendersettings.resolution_x / float(ps.dpi) * INCH_TO_CM / float(m2cm) * ps.margin_left_right / 100.0
     else:
         MARGIN_TO_EDGE_HORIZONTAL = ps.margin_left_right
         
     if ps.margin_top_bottom >= 1.0: # interprete as percentage
-        MARGIN_TO_EDGE_VERTICAL = ps.height_cm / float(m2cm) * ps.margin_top_bottom / 100
+        MARGIN_TO_EDGE_VERTICAL = rendersettings.resolution_y / float(ps.dpi) * INCH_TO_CM / float(m2cm) * ps.margin_top_bottom / 100.0
     else:
         MARGIN_TO_EDGE_VERTICAL = ps.margin_top_bottom
    
@@ -610,7 +620,14 @@ def position_within_render(context, obj=None, ps=None):
     p = obj.parent
     if p:
         bpy.ops.object.parent_clear(type='CLEAR')
+    ## clear rotation temporarily:
+    #rotation_old = obj.rotation.copy()
+    #obj.rotation = [0.0, 0.0, 0.0]
     origin_old = obj.location + obj.delta_location#TODO Calc rotation matrix from obj.rotation_* # because origin_set influences location only.
+    #bpy.ops.object.location_clear()
+    #obj.delta_location = [0.0, 0.0, 0.0]
+    # HACK Works around the need to execute position within render twice. TODO Why is rotation clear a fix for this weirdness?
+    bpy.ops.object.rotation_clear()
     location_old = obj.location.copy()
     delta_location_old = obj.delta_location.copy()
     print("origin_old: ", origin_old)
@@ -620,9 +637,10 @@ def position_within_render(context, obj=None, ps=None):
     #origin_old = p.location + obj.location * p.matrix_world + obj.delta_location * obj.matrix_world * p.matrix_world
     bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY')#, center='BOUNDS')
     # Create a delta, such that the missing parent information doesn't matter:
-    origin_delta = obj.location - location_old
+    origin_delta = location_old - obj.location
     #origin_new = obj.location + obj.delta_location
     #origin_delta = origin_new - origin_old
+    print("origin_delta: ", origin_delta, " from location_old: ", location_old, " - location: ", obj.location)
     
     
     #    Camera -
@@ -638,6 +656,7 @@ def position_within_render(context, obj=None, ps=None):
     # rotation is easiest).
     x = - ps.width_cm / float(m2cm) / 2.0 + MARGIN_TO_EDGE_HORIZONTAL + req_space_x * ps.scale_factor # Because the object's origin is moved to the center explicitely.
     y = ps.height_cm / float(m2cm) / 2.0 - req_space_y * ps.scale_factor - MARGIN_TO_EDGE_VERTICAL
+    print("x: %s y: %s scale_factor: %s " % (x, y, ps.scale_factor))
     #if ps.scale_factor >= 1.0:
     x /= ps.scale_factor
     y /= ps.scale_factor
@@ -669,8 +688,32 @@ def position_within_render(context, obj=None, ps=None):
     context.scene.cursor_location = cursor_location_old
     
     # Adapt the delta location to take the origin offset into account:
-    obj.delta_location -= origin_delta
+    # Remove the LOCAL_WITH_PARENT transform first, remember the old:
+    # TODO Simply calculate the rotation matrix Rot(axis, angle) manually from obj.rotation_angles.
+    #matrix_world_old = obj.matrix_world.copy()
+    #matrix_world_without_parent = obj.convert_space(matrix=obj.matrix_world, from_space='LOCAL_WITH_PARENT', to_space='LOCAL')
+    #obj.matrix_world = matrix_world_without_parent
+    # With the transform removed, the object is effectively in world/most global space, hence the delta can be applied:
+    # Possible because the origin delta is linear to the object's dimensions!
+    obj.delta_location += origin_delta
     
+    #print('origin_delta:   ', origin_delta)
+    #print('delta_location: ', obj.delta_location)
+    #th_i, h_i, w_i = get_smallest_central_and_largest(origin_delta)
+    #if obj.delta_location[largest_index] < 0:
+    #    obj.delta_location[largest_index] += abs(origin_delta[w_i])
+    #else:
+    #    obj.delta_location[largest_index] -= abs(origin_delta[w_i])
+    #    
+    #if obj.delta_location[second_largest_index] < 0:
+    #    obj.delta_location[second_largest_index] += abs(origin_delta[h_i])
+    #else:
+    #    obj.delta_location[second_largest_index] -= abs(origin_delta[h_i])
+        
+    #obj.delta_location[smallest_index] -= origin_delta[th_i]
+    
+    #obj.matrix_world = matrix_world_old * Matrix([1,0,0],[0,1,0],[0,0,1], origin_delta)
+    #obj.rotation = rotation_old
     
     # Set camera as parent if necessary:
     if not obj.parent:
@@ -834,7 +877,7 @@ def ensure_height(obj, print_settings, resulting_height=0.0):
     # Assumption: text object's width is largest. Height is 2nd longest. Depth/thickness comes third.
     # TODO Figuring text height directly possible?
     smallest_index, second_largest_index, largest_index = get_smallest_central_and_largest(obj.dimensions)
-    
+    print("object dimensions: ", obj.dimensions, " smallest: ", smallest_index, " central: ", second_largest_index, " largest: ", largest_index)
     object_height = obj.dimensions[second_largest_index]
     print(object_height, ' target height: ', target_height) 
     # The height determines the scale factor, the other dimensions are scaled with the same factor to avoid distortion:
@@ -1029,6 +1072,7 @@ class OBJECT_OT_text_change(Operator):
     bl_idname = "object.text_change"
     bl_label = "Change text."
     bl_description = "Change the text of a text object."
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):#, text_object, text=""):
         return change_text(context, text_object=context.scene.objects.active, text=context.scene.name)#<- HACK. TODO Solve properly. Maybe blender could add this as a built-in operator. Or use self.text if possible and reliable?)
@@ -1039,8 +1083,10 @@ class OBJECT_OT_position_within_render(Operator):
     bl_idname = "object.position_within_render"
     bl_label = "Position within render"
     bl_description = "Position within render, e.g. in a corner if margins are set as such."
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):#, text_object, text=""):
+        #HACK rotation_clear() now fixed it. position_within_render(context)
         return position_within_render(context)
         
     
@@ -1049,6 +1095,7 @@ class OBJECT_OT_position_in_top_left_corner(Operator):
     bl_idname = "object.position_in_top_left_corner"
     bl_label = "Position in top left corner."
     bl_description = "Position within render, in the top left corner."
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):#, text_object, text=""):
         return position_in_top_left_corner(context)
@@ -1059,6 +1106,7 @@ class OBJECT_OT_position_in_top_right_corner(Operator):
     bl_idname = "object.position_in_top_right_corner"
     bl_label = "Position in top right corner."
     bl_description = "Position within render, in the top right corner."
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):#, text_object, text=""):
         return position_in_top_right_corner(context)
@@ -1069,6 +1117,7 @@ class OBJECT_OT_position_in_bottom_right_corner(Operator):
     bl_idname = "object.position_in_bottom_right_corner"
     bl_label = "Position in bottom right corner."
     bl_description = "Position within render, in the bottom right corner."
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):#, text_object, text=""):
         return position_in_bottom_right_corner(context)
@@ -1079,6 +1128,7 @@ class OBJECT_OT_position_in_bottom_left_corner(Operator):
     bl_idname = "object.position_in_bottom_left_corner"
     bl_label = "Position in bottom left corner."
     bl_description = "Position within render, in the bottom left corner."
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):#, text_object, text=""):
         return position_in_bottom_left_corner(context)
@@ -1089,6 +1139,7 @@ class RENDER_OT_ensure_height(Operator):
     bl_idname = "render.ensure_height"
     bl_label = "Ensure a certain printed height."
     bl_description = "Set the dimensions of a text object such that it is printed out in a certain height."
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):#, resulting_height, obj):
         return ensure_height(obj=context.scene.objects.active, print_settings=context.scene.print_settings)
