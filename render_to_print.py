@@ -421,6 +421,9 @@ def print2scale(ps, context):
             if (not scale_ratio_text_object and ps.add_scale_ratio_text):
                 # Add a text for the scale factor e.g. 1:10 on the print.
                 scale_ratio_text_object = add_text(context, object_name="scale_ratio")
+                scale_ratio_text_object.location[0] = 0
+                scale_ratio_text_object.location[1] = 0
+                scale_ratio_text_object.location[2] = 0
                 # Scale the object to be visible depending on the chosen scale ratio
                 # (which relates to the render size and object dimensions/scale used for modeling).
                 # The smaller the scale_factor (e.g. 1:50 = 1/50) the farther away the camera will appear.
@@ -628,6 +631,9 @@ def position_within_render(context, obj=None, ps=None):
     #obj.delta_location = [0.0, 0.0, 0.0]
     # HACK Works around the need to execute position within render twice. TODO Why is rotation clear a fix for this weirdness?
     bpy.ops.object.rotation_clear()
+    obj.location[0] = 0
+    obj.location[1] = 0
+    obj.location[2] = 0
     location_old = obj.location.copy()
     delta_location_old = obj.delta_location.copy()
     print("origin_old: ", origin_old)
