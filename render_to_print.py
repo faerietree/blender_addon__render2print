@@ -310,6 +310,11 @@ class RenderPrintSettings(PropertyGroup):
     )
     
     # Margins for printers that require a blank border (due to technical or visual reasons):
+    use_margins = BoolProperty(
+            name="Use margins"
+            ,description="Calculate the render size such that margins won't be rendered (results in smaller rendered image)."
+            ,default=True
+    )
     margin_top = FloatProperty(
             name="Top margin"
             ,description="Blank space from the top paper edge."
@@ -696,6 +701,7 @@ def position_within_render(context, obj=None, ps=None):
     find_or_create_camera_and_assign(context)
     
     if ps.width_px != context.scene.render.resolution_x or ps.height_px != context.scene.render.resolution_y:
+        print(ps.width_px, context.scene.render.resolution_x, ps.height_px, context.scene.render.resolution_y)
         bpy.ops.render.apply_print_settings()
         
     rendersettings = context.scene.render
@@ -707,12 +713,12 @@ def position_within_render(context, obj=None, ps=None):
     #SPACE_PER_CHAR = 2
     # Extra margin also is required because dimensions of a text object can be smaller than the required space, because the center is a bit too far left because chars start farther to the right, e.g. a 1.
     if ps.margin_left_right >= 1.0: # interprete as percentage
-        MARGIN_TO_EDGE_HORIZONTAL = rendersettings.resolution_x / float(ps.dpi) * INCH_TO_CM / m_TO_cm * ps.margin_left_right / 100.0
+        MARGIN_TO_EDGE_HORIZONTAL = rendersettings.resolution_x / float(ps.dpi) * in_TO_cm / m_TO_cm * ps.margin_left_right / 100.0
     else:
         MARGIN_TO_EDGE_HORIZONTAL = ps.margin_left_right
         
     if ps.margin_top_bottom >= 1.0: # interprete as percentage
-        MARGIN_TO_EDGE_VERTICAL = rendersettings.resolution_y / float(ps.dpi) * INCH_TO_CM / m_TO_cm * ps.margin_top_bottom / 100.0
+        MARGIN_TO_EDGE_VERTICAL = rendersettings.resolution_y / float(ps.dpi) * in_TO_cm / m_TO_cm * ps.margin_top_bottom / 100.0
     else:
         MARGIN_TO_EDGE_VERTICAL = ps.margin_top_bottom
    
@@ -1041,7 +1047,31 @@ def convertScaleFactorToRatioString(scale_factor, precision=2):
     return text 
 
 
-INCH_TO_CM = 2.54 # conversion factor
+in_TO_cm = 2.54 # conversion factor
+
+
+
+#def printed_distance_to_pixel(resulting_distance_m):
+def printed_m_to_pixels(m, ps): # inline function
+    return round((m * ps.dpi) / in_TO_cm * m_TO_cm)
+    
+
+
+def derive_width_pixels(ps):
+    m = ps.width_cm / m_TO_cm
+    if ps.use_margins:
+        m = m - ps.margin_left - ps.margin_right
+    ps.width_px = printed_m_to_pixels(m, ps)
+
+
+
+def derive_height_pixels(ps):
+    m = ps.height_cm / m_TO_cm
+    if ps.use_margins:
+        m = m - ps.margin_top - ps.margin_bottom
+    ps.height_px = printed_m_to_pixels(m, ps)
+
+
 
 def pixels_from_print(ps):
     tipo, dim_w, dim_h = paper_presets_data[ps.preset]
@@ -1055,18 +1085,18 @@ def pixels_from_print(ps):
             ps.width_cm = dim_w
             ps.height_cm = dim_h
         # Update potentially outdated pixel values: 
-        ps.width_px = round((ps.width_cm * ps.dpi) / INCH_TO_CM)
-        ps.height_px = round((ps.height_cm * ps.dpi) / INCH_TO_CM)
+        derive_width_pixels(ps) 
+        derive_height_pixels(ps) 
         
     else:
         #dim_w = ps.width_cm
         #dim_h = ps.height_cm
         if ps.unit_from == "CM_TO_PIXELS":
-            ps.width_px = round((ps.width_cm * ps.dpi) / INCH_TO_CM)
-            ps.height_px = round((ps.height_cm * ps.dpi) / INCH_TO_CM)
+            derive_width_pixels(ps) 
+            derive_height_pixels(ps) 
         else: #PIXELS_TO_CM
-            ps.width_cm = (ps.width_px / ps.dpi) * INCH_TO_CM
-            ps.height_cm = (ps.height_px / ps.dpi) * INCH_TO_CM
+            ps.width_cm = (ps.width_px / ps.dpi) * in_TO_cm + ps.margin_left * m_TO_cm + ps.margin_right * m_TO_cm
+            ps.height_cm = (ps.height_px / ps.dpi) * in_TO_cm + ps.margin_top * m_TO_cm + ps.margin_bottom * m_TO_cm
 
 
 
@@ -1113,10 +1143,12 @@ class RENDER_PT_print(Panel):
         #GENERAL PRINT SETTINGS
         # Not needed directly by render to print, nevertheless located in print settings for single source principle, may be used by various extensions that require margin information:
         row = layout.row(align=True)
+        row.prop(ps, "use_margins", text="")
         row.prop(ps, "margin_top", text="Top margin")
         row.prop(ps, "margin_right", text="Right margin")
         row.prop(ps, "margin_bottom", text="Bottom margin")
         row.prop(ps, "margin_left", text="Left margin")
+        row.active = ps.use_margins
 
         row = layout.row(align=True)
         row1 = layout.row(align=True)
