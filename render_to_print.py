@@ -308,6 +308,39 @@ class RenderPrintSettings(PropertyGroup):
             #,update=ensure_height <- if text object is selected and active. 
             ,update=update_settings_cb
     )
+    
+    # Margins for printers that require a blank border (due to technical or visual reasons):
+    margin_top = FloatProperty(
+            name="Top margin"
+            ,description="Blank space from the top paper edge."
+            ,default=.015 # 1.5cm  #1 # 1%
+            ,min=0.0
+            ,max=100.0
+    )
+    margin_right = FloatProperty(
+            name="Right margin"
+            ,description="Blank space from the right paper edge."
+            ,default=.015 # 1.5cm  #1 # 1%
+            ,min=0.0
+            ,max=100.0
+    )
+    margin_bottom = FloatProperty(
+            name="Bottom margin"
+            ,description="Blank space from the bottom paper edge."
+            ,default=.015 # 1.5cm  #1 # 1%
+            ,min=0.0
+            ,max=100.0
+    )
+    margin_left = FloatProperty(
+            name="Left margin"
+            ,description="Blank space from the left paper edge."
+            ,default=.015 # 1.5cm  #1 # 1%
+            ,min=0.0
+            ,max=100.0
+    )
+    
+    
+    # Position within render:
     margin_top_bottom = FloatProperty(
             name="Vertical margin"
             ,description="Distance to top, bottom edges. Interpreted as percentage if >= 1."
@@ -352,8 +385,8 @@ def print2scale(ps, context):
             # SET THE CAMERA's ZOOM OR ORTHOGRAPHIC SCALE
             #######
             aspect_ratio = ps.height_cm / ps.width_cm #as it's a ratio converting to meter or not does not matter here!
-            print(context.scene.camera.type)
             if (not context.scene.camera.type == 'CAMERA'):
+                print("Camera does not have type 'CAMERA', instead: ", context.scene.camera.type)
                 return {'CANCELLED'}
             
             
@@ -604,8 +637,8 @@ def position_within_render(context, obj=None, ps=None):
    
     #MARGIN_TO_EDGE_VERTICAL /= ps.scale_factor
     #MARGIN_TO_EDGE_HORIZONTAL /= ps.scale_factor
-    print('MARGIN_TO_EDGE_HORIZONTAL: ', MARGIN_TO_EDGE_HORIZONTAL)
-    print('MARGIN_TO_EDGE_VERTICAL: ', MARGIN_TO_EDGE_VERTICAL)
+    #print('MARGIN_TO_EDGE_HORIZONTAL: ', MARGIN_TO_EDGE_HORIZONTAL)
+    #print('MARGIN_TO_EDGE_VERTICAL: ', MARGIN_TO_EDGE_VERTICAL)
 
     # x = camera origin.x (global) + render sizeX / 2 - space * number_of_characters
     smallest_index, second_largest_index, largest_index = get_smallest_central_and_largest(obj.dimensions)
@@ -636,7 +669,7 @@ def position_within_render(context, obj=None, ps=None):
     obj.location[2] = 0
     location_old = obj.location.copy()
     delta_location_old = obj.delta_location.copy()
-    print("origin_old: ", origin_old)
+    #print("origin_old: ", origin_old)
     #if not p:
     #    # No parent => Use the camera as this is the soon to be parent.
     #    p = context.scene.camera
@@ -646,7 +679,7 @@ def position_within_render(context, obj=None, ps=None):
     origin_delta = location_old - obj.location
     #origin_new = obj.location + obj.delta_location
     #origin_delta = origin_new - origin_old
-    print("origin_delta: ", origin_delta, " from location_old: ", location_old, " - location: ", obj.location)
+    #print("origin_delta: ", origin_delta, " from location_old: ", location_old, " - location: ", obj.location)
     
     
     #    Camera -
@@ -744,7 +777,7 @@ def get_smallest_central_and_largest(vector_3d):
     x = vector_3d[0]
     y = vector_3d[1]
     z = vector_3d[2]
-    print(vector_3d)
+    #print("get_smallest_central_and_largest(): vector_3d: ", vector_3d)
     # By default it is assumed that the text is looked onto directly from positive Z axis towards negative Z axis.
     second_largest_index = 0
     largest_index = 2
@@ -883,9 +916,9 @@ def ensure_height(obj, print_settings, resulting_height=0.0):
     # Assumption: text object's width is largest. Height is 2nd longest. Depth/thickness comes third.
     # TODO Figuring text height directly possible?
     smallest_index, second_largest_index, largest_index = get_smallest_central_and_largest(obj.dimensions)
-    print("object dimensions: ", obj.dimensions, " smallest: ", smallest_index, " central: ", second_largest_index, " largest: ", largest_index)
+    #print("object dimensions: ", obj.dimensions, " smallest: ", smallest_index, " central: ", second_largest_index, " largest: ", largest_index)
     object_height = obj.dimensions[second_largest_index]
-    print(object_height, ' target height: ', target_height) 
+    #print(object_height, ' target height: ', target_height) 
     # The height determines the scale factor, the other dimensions are scaled with the same factor to avoid distortion:
     scale_factor = target_height / object_height
     #target_dim = obj.dimensions * scale_factor # Vector times scalar.
@@ -988,11 +1021,19 @@ class RENDER_PT_print(Panel):
         
         row = layout.row(align=True)
         row.active = ps.print_to_scale
-        row.label("Margins:")
+        #row.label("Positioning margins:")
+        row.operator("object.position_within_render")#, icon="", 
         row.prop(ps, "margin_left_right", text="Margin left, right.")
         row.prop(ps, "margin_top_bottom", text="Margin top, bottom.")
         #PRINT2SCALE -END
 
+        #GENERAL PRINT SETTINGS
+        # Not needed directly by render to print, nevertheless located in print settings for single source principle, may be used by various extensions that require margin information:
+        row = layout.row(align=True)
+        row.prop(ps, "margin_top", text="Top margin")
+        row.prop(ps, "margin_right", text="Right margin")
+        row.prop(ps, "margin_bottom", text="Bottom margin")
+        row.prop(ps, "margin_left", text="Left margin")
 
         row = layout.row(align=True)
         row1 = layout.row(align=True)
@@ -1086,13 +1127,15 @@ class OBJECT_OT_text_change(Operator):
     
     
 class OBJECT_OT_position_within_render(Operator):
+    '''Position within render, e.g. in a corner if margins are set as such. Note that proper results may require the print settings to be applied to the camera, render settings.'''
     bl_idname = "object.position_within_render"
     bl_label = "Position within render"
-    bl_description = "Position within render, e.g. in a corner if margins are set as such."
+    bl_description = "Position within render, e.g. in a corner if margins are set as such. Note that proper results may require the print settings to be applied to the camera, render settings."
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):#, text_object, text=""):
         #HACK rotation_clear() now fixed it. position_within_render(context)
+        #bpy.ops.render.apply_render2print_settings() <- some extensions may prefer or require to handle this own their own. Also if the position within render operator is called frequently then not applying the print settings may save performance (this could be mitigated by checking if the settings changed before applying, e.g. comparing render settings' and the print settings' resolution).
         return position_within_render(context)
         
     
