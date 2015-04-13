@@ -598,7 +598,7 @@ def position_in_top_right_corner(context, obj=None, ps=None):
     find_or_create_camera_and_assign(context)
     
     if ps.width_px != context.scene.render.resolution_x or ps.height_px != context.scene.render.resolution_y:
-        bpy.ops.render.apply_render2print_settings()
+        bpy.ops.render.apply_print_settings()
     
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
@@ -624,7 +624,7 @@ def position_in_bottom_right_corner(context, obj=None, ps=None):
     find_or_create_camera_and_assign(context)
     
     if ps.width_px != context.scene.render.resolution_x or ps.height_px != context.scene.render.resolution_y:
-        bpy.ops.render.apply_render2print_settings()
+        bpy.ops.render.apply_print_settings()
     
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
@@ -662,7 +662,7 @@ def position_in_bottom_left_corner(context, obj=None, ps=None):
     find_or_create_camera_and_assign(context)
     
     if ps.width_px != context.scene.render.resolution_x or ps.height_px != context.scene.render.resolution_y:
-        bpy.ops.render.apply_render2print_settings()
+        bpy.ops.render.apply_print_settings()
         
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
@@ -696,7 +696,7 @@ def position_within_render(context, obj=None, ps=None):
     find_or_create_camera_and_assign(context)
     
     if ps.width_px != context.scene.render.resolution_x or ps.height_px != context.scene.render.resolution_y:
-        bpy.ops.render.apply_render2print_settings()
+        bpy.ops.render.apply_print_settings()
         
     rendersettings = context.scene.render
 
@@ -1148,7 +1148,7 @@ class RENDER_PT_print(Panel):
         row6.label("Inch Height: %.2f" % (ps.height_cm / 2.54))
         col.separator()
 
-        row7.operator("render.apply_render2print_settings", icon="RENDER_STILL")
+        row7.operator("render.apply_print_settings", icon="RENDER_STILL")
 
         # Hide UI elements when logic demands it:
         tipo = paper_presets_data[ps.preset][0]
@@ -1218,7 +1218,7 @@ class OBJECT_OT_position_within_render(Operator):
 
     def execute(self, context):#, text_object, text=""):
         #HACK rotation_clear() now fixed it. position_within_render(context)
-        #bpy.ops.render.apply_render2print_settings() <- some extensions may prefer or require to handle this own their own. Also if the position within render operator is called frequently then not applying the print settings may save performance (this could be mitigated by checking if the settings changed before applying, e.g. comparing render settings' and the print settings' resolution).
+        #bpy.ops.render.apply_print_settings() <- some extensions may prefer or require to handle this own their own. Also if the position within render operator is called frequently then not applying the print settings may save performance (this could be mitigated by checking if the settings changed before applying, e.g. comparing render settings' and the print settings' resolution).
         return position_within_render(context)
         
     
@@ -1278,9 +1278,9 @@ class RENDER_OT_ensure_height(Operator):
     
     
 
-class RENDER_OT_apply_render2print_settings(Operator):
-    bl_idname = "render.apply_render2print_settings"
-    bl_label = "Apply Render2Print settings."
+class RENDER_OT_apply_print_settings(Operator):
+    bl_idname = "render.apply_print_settings"
+    bl_label = "Apply print settings."
     bl_description = "Set the render dimension."
 
     def execute(self, context):
@@ -1310,7 +1310,7 @@ def getLastObjectInSelection(context):
 
 
 def register():
-    bpy.utils.register_class(RENDER_OT_apply_render2print_settings)
+    bpy.utils.register_class(RENDER_OT_apply_print_settings)
     bpy.utils.register_class(RENDER_OT_ensure_height)
     bpy.utils.register_class(OBJECT_OT_text_change)
     bpy.utils.register_class(OBJECT_OT_position_within_render)
@@ -1325,7 +1325,7 @@ def register():
 
 
 def unregister():
-    bpy.utils.unregister_class(RENDER_OT_apply_render2print_settings)
+    bpy.utils.unregister_class(RENDER_OT_apply_print_settings)
     bpy.utils.unregister_class(RENDER_OT_ensure_height)
     bpy.utils.unregister_class(OBJECT_OT_text_change)
     bpy.utils.unregister_class(OBJECT_OT_position_within_render)
