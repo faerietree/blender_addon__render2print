@@ -1055,15 +1055,15 @@ def pixels_from_print(ps):
             ps.width_cm = dim_w
             ps.height_cm = dim_h
         # Update potentially outdated pixel values: 
-        ps.width_px = math.ceil((ps.width_cm * ps.dpi) / INCH_TO_CM)
-        ps.height_px = math.ceil((ps.height_cm * ps.dpi) / INCH_TO_CM)
+        ps.width_px = round((ps.width_cm * ps.dpi) / INCH_TO_CM)
+        ps.height_px = round((ps.height_cm * ps.dpi) / INCH_TO_CM)
         
     else:
         #dim_w = ps.width_cm
         #dim_h = ps.height_cm
         if ps.unit_from == "CM_TO_PIXELS":
-            ps.width_px = math.ceil((ps.width_cm * ps.dpi) / INCH_TO_CM)
-            ps.height_px = math.ceil((ps.height_cm * ps.dpi) / INCH_TO_CM)
+            ps.width_px = round((ps.width_cm * ps.dpi) / INCH_TO_CM)
+            ps.height_px = round((ps.height_cm * ps.dpi) / INCH_TO_CM)
         else: #PIXELS_TO_CM
             ps.width_cm = (ps.width_px / ps.dpi) * INCH_TO_CM
             ps.height_cm = (ps.height_px / ps.dpi) * INCH_TO_CM
