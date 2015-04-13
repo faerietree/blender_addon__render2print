@@ -127,7 +127,7 @@ def update_settings_cb(self, context):
         ps = self
         pixels_from_print(ps)
         if ps.add_scale_ratio_text:
-            height_max = ps.width_cm / float(m2cm)
+            height_max = ps.width_cm / m_TO_cm
             if ps.text_height > height_max:
                 ps.text_height = height_max
             #elif ps.text_height < height_min:
@@ -371,12 +371,9 @@ def print2scale(ps, context):
             else:
                 if (context.mode != 'OBJECT'):
                     print('Warning: Switched not to Object mode but are in Edit mode.')
-                
-            if (context.scene.camera is None):
-                # Create a camera:
-                bpy.ops.object.add('CAMERA', layers=list(LAYERS_ALL))
-                ##the added object keeps the short name, while the others are renamed
-                #context.scene.selected_object['Camera']
+            
+
+            find_or_create_camera_and_assign(context)
             #
             #At this point the scene must have a camera.
             #
@@ -390,9 +387,9 @@ def print2scale(ps, context):
                 return {'CANCELLED'}
             
             
-            longer_side = ps.height_cm / float(m2cm)
+            longer_side = ps.height_cm / m_TO_cm
             if (ps.width_cm > ps.height_cm): #if (ps.orientation == 'Landscape'):
-                longer_side = ps.width_cm / float(m2cm)
+                longer_side = ps.width_cm / m_TO_cm
 
             #print('old ortho scale: ', context.scene.camera.data.ortho_scale)                
             if not context.scene.camera.data.type == 'ORTHO':
@@ -513,6 +510,7 @@ def print2scale(ps, context):
                 return {'FINISHED'}
             
             #else:
+            scale_ratio_text_object.layers = list(LAYERS_ALL)
             scale_ratio_text = convertScaleFactorToRatioString(scale_factor=ps.scale_factor);
             change_text(context, scale_ratio_text_object, scale_ratio_text)
             ensure_height(obj=scale_ratio_text_object, print_settings=ps)
@@ -520,6 +518,28 @@ def print2scale(ps, context):
             # for more flexibility let the margins be chosen freely:
             position_within_render(context, obj=scale_ratio_text_object, ps=ps)
             
+
+
+def find_or_create_camera_and_assign(context):
+    if (context.scene.camera is None):
+        for scene_o in context.scene.objects:
+            if scene_o.type == 'CAMERA':
+                print("Assigning found camera %s to scene." % scene_o)
+                context.scene.camera = scene_o
+                context.scene.camera.layers = list(LAYERS_ALL)
+                return
+            
+    active_old = context.scene.objects.active
+    
+    if (context.scene.camera is None):
+        # Create a camera:
+        bpy.ops.object.add('CAMERA', layers=list(LAYERS_ALL))
+        context.scene.camera = context.scene.objects.active
+        ##the added object keeps the short name, while the others are renamed
+        #context.scene.selected_object['Camera']
+        
+    context.scene.objects.active = active_old
+
 
 
 def set_parent(context, to_be_child_objects, parent_object):
@@ -550,10 +570,18 @@ def set_parent(context, to_be_child_objects, parent_object):
 def position_in_top_left_corner(context, obj=None, ps=None):
     if not ps:
         ps = context.scene.print_settings
+    if not obj:
+        obj = context.scene.objects.active
+    find_or_create_camera_and_assign(context)
+    
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
-    ps.margin_left_right = 10
-    ps.margin_top_bottom = 10
+    #ps.margin_left_right = 10
+    #ps.margin_top_bottom = 10
+    ps.margin_left_right = obj.dimensions[0] / 2.0 * ps.scale_factor
+    ps.margin_left_right += ps.margin_right
+    ps.margin_top_bottom = obj.dimensions[1] / 2.0 * ps.scale_factor
+    ps.margin_top_bottom += ps.margin_bottom
     #bpy.ops.object.position_within_render()
     result = position_within_render(context, obj, ps)
     ps.margin_left_right = margin_left_right_old
@@ -565,10 +593,21 @@ def position_in_top_left_corner(context, obj=None, ps=None):
 def position_in_top_right_corner(context, obj=None, ps=None):
     if not ps:
         ps = context.scene.print_settings
+    if not obj:
+        obj = context.scene.objects.active
+    find_or_create_camera_and_assign(context)
+    
+    if ps.width_px != context.scene.render.resolution_x or ps.height_px != context.scene.render.resolution_y:
+        bpy.ops.render.apply_render2print_settings()
+    
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
-    ps.margin_left_right = 90
-    ps.margin_top_bottom = 10
+    #ps.margin_left_right = 90 # TODO Depends on object dimensions.
+    #ps.margin_top_bottom = 1
+    ps.margin_left_right = ps.width_cm / m_TO_cm - obj.dimensions[0] / 2.0 * ps.scale_factor
+    ps.margin_left_right -= ps.margin_right
+    ps.margin_top_bottom = obj.dimensions[1] / 2.0 * ps.scale_factor
+    ps.margin_top_bottom += ps.margin_bottom
     #bpy.ops.object.position_within_render()
     result = position_within_render(context, obj, ps)
     ps.margin_left_right = margin_left_right_old
@@ -580,10 +619,33 @@ def position_in_top_right_corner(context, obj=None, ps=None):
 def position_in_bottom_right_corner(context, obj=None, ps=None):
     if not ps:
         ps = context.scene.print_settings
+    if not obj:
+        obj = context.scene.objects.active
+    find_or_create_camera_and_assign(context)
+    
+    if ps.width_px != context.scene.render.resolution_x or ps.height_px != context.scene.render.resolution_y:
+        bpy.ops.render.apply_render2print_settings()
+    
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
-    ps.margin_left_right = 90
-    ps.margin_top_bottom = 90
+    #ps.margin_left_right = 90 # 
+    #ps.margin_top_bottom = 90
+    smallest_index, second_largest_index, largest_index = get_smallest_central_and_largest(obj.dimensions)
+    #req_space = Vector( TODO Enable if rotation no longer is cleared because then a math Vector will be required for calculations.
+    req_space = [
+        obj.dimensions[largest_index],
+        obj.dimensions[second_largest_index],
+        obj.dimensions[smallest_index]
+        ]
+        #)
+    # The object has the camera as parent, the dimensions are in local frame and of global world amount. That means the object inherits the rotation.
+    # TODO (The object may be rotated relative to the camera, which currently is cleared. Maybe a more general solution should be coded.)
+    req_space_max = max(req_space[0], req_space[1], req_space[2])
+    #ps.margin_left_right = ps.width_cm / m_TO_cm - req_space_max / 2.0 * ps.scale_factor
+    ps.margin_left_right = ps.width_cm / m_TO_cm - obj.dimensions[0] / 2.0 * ps.scale_factor
+    ps.margin_left_right -= ps.margin_right
+    ps.margin_top_bottom = ps.height_cm / m_TO_cm - obj.dimensions[1] / 2.0 * ps.scale_factor
+    ps.margin_top_bottom -= ps.margin_bottom
     #bpy.ops.object.position_within_render()
     result = position_within_render(context, obj, ps)
     ps.margin_left_right = margin_left_right_old
@@ -595,10 +657,22 @@ def position_in_bottom_right_corner(context, obj=None, ps=None):
 def position_in_bottom_left_corner(context, obj=None, ps=None):
     if not ps:
         ps = context.scene.print_settings
+    if not obj:
+        obj = context.scene.objects.active
+    find_or_create_camera_and_assign(context)
+    
+    if ps.width_px != context.scene.render.resolution_x or ps.height_px != context.scene.render.resolution_y:
+        bpy.ops.render.apply_render2print_settings()
+        
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
-    ps.margin_left_right = 10
-    ps.margin_top_bottom = 90
+    #ps.margin_left_right = 1
+    #ps.margin_top_bottom = 90
+    #ps.margin_left_right = ps.width_cm / m_TO_cm - req_space_max / 2.0 * ps.scale_factor
+    ps.margin_left_right = obj.dimensions[0] / 2.0 * ps.scale_factor
+    ps.margin_left_right += ps.margin_right
+    ps.margin_top_bottom = ps.height_cm / m_TO_cm - obj.dimensions[1] / 2.0 * ps.scale_factor
+    ps.margin_top_bottom -= ps.margin_bottom
     #bpy.ops.object.position_within_render()
     result = position_within_render(context, obj, ps)
     ps.margin_left_right = margin_left_right_old
@@ -609,13 +683,20 @@ def position_in_bottom_left_corner(context, obj=None, ps=None):
     
 def position_within_render(context, obj=None, ps=None):
     print('Positioning within render ...')
+    active_old = None
     if not obj:
         obj = context.scene.objects.active
+    else:
+        active_old = context.scene.objects.active
     if not obj:
         print('No object. obj: ', obj)
         return {'CANCELLED'}
     if not ps:
         ps = context.scene.print_settings
+    find_or_create_camera_and_assign(context)
+    
+    if ps.width_px != context.scene.render.resolution_x or ps.height_px != context.scene.render.resolution_y:
+        bpy.ops.render.apply_render2print_settings()
         
     rendersettings = context.scene.render
 
@@ -626,12 +707,12 @@ def position_within_render(context, obj=None, ps=None):
     #SPACE_PER_CHAR = 2
     # Extra margin also is required because dimensions of a text object can be smaller than the required space, because the center is a bit too far left because chars start farther to the right, e.g. a 1.
     if ps.margin_left_right >= 1.0: # interprete as percentage
-        MARGIN_TO_EDGE_HORIZONTAL = rendersettings.resolution_x / float(ps.dpi) * INCH_TO_CM / float(m2cm) * ps.margin_left_right / 100.0
+        MARGIN_TO_EDGE_HORIZONTAL = rendersettings.resolution_x / float(ps.dpi) * INCH_TO_CM / m_TO_cm * ps.margin_left_right / 100.0
     else:
         MARGIN_TO_EDGE_HORIZONTAL = ps.margin_left_right
         
     if ps.margin_top_bottom >= 1.0: # interprete as percentage
-        MARGIN_TO_EDGE_VERTICAL = rendersettings.resolution_y / float(ps.dpi) * INCH_TO_CM / float(m2cm) * ps.margin_top_bottom / 100.0
+        MARGIN_TO_EDGE_VERTICAL = rendersettings.resolution_y / float(ps.dpi) * INCH_TO_CM / m_TO_cm * ps.margin_top_bottom / 100.0
     else:
         MARGIN_TO_EDGE_VERTICAL = ps.margin_top_bottom
    
@@ -693,8 +774,8 @@ def position_within_render(context, obj=None, ps=None):
     # Not to forget that the camera object's rotation is crucial as it influences the direction of the render
     # resolution x and y. So this is TODO if the parenting approach fails but it ain't (inheriting the camera
     # rotation is easiest).
-    x = - ps.width_cm / float(m2cm) / 2.0 + MARGIN_TO_EDGE_HORIZONTAL + req_space_x * ps.scale_factor # Because the object's origin is moved to the center explicitely.
-    y = ps.height_cm / float(m2cm) / 2.0 - req_space_y * ps.scale_factor - MARGIN_TO_EDGE_VERTICAL
+    x = - ps.width_cm / m_TO_cm / 2.0 + MARGIN_TO_EDGE_HORIZONTAL + req_space_x * ps.scale_factor # Because the object's origin is moved to the center explicitely.
+    y = ps.height_cm / m_TO_cm / 2.0 - req_space_y * ps.scale_factor - MARGIN_TO_EDGE_VERTICAL
     print("x: %s y: %s scale_factor: %s " % (x, y, ps.scale_factor))
     #if ps.scale_factor >= 1.0:
     x /= ps.scale_factor
@@ -769,6 +850,8 @@ def position_within_render(context, obj=None, ps=None):
     
     #context.scene.cursor_location = obj.parent.location + obj.parent.delta_location + (origin_old + delta_location_delta) * obj.matrix_parent_inverse # valid, because the parent object was cleared.
     
+    if active_old:
+        context.scene.objects.active = active_old
     return {'FINISHED'}
 
 
@@ -896,7 +979,7 @@ def ensure_height(obj, print_settings, resulting_height=0.0):
         # speedier try: x except NameError: not exists else: exists.
         # EITHER
         if ('TEXT_SIZE_PERCENTAGE' in locals() or 'TEXT_SIZE_PERCENTAGE' in globals()) and TEXT_SIZE_PERCENTAGE:
-            height_available = print_settings.width_cm / float(m2cm)
+            height_available = print_settings.width_cm / m_TO_cm
             target_height = height_available * TEXT_SIZE_PERCENTAGE / 100
         # OR (Overrides the above if both height percentage and absolute value are given.)
         elif ('RESULTING_TEXT_HEIGHT' in locals() or 'RESULTING_TEXT_HEIGHT' in globals()) and RESULTING_TEXT_HEIGHT:
@@ -1113,7 +1196,7 @@ class RENDER_PT_print(Panel):
                 row5.enabled = False
 
 
-m2cm = 100
+m_TO_cm = 100.0
 
 class OBJECT_OT_text_change(Operator):
     bl_idname = "object.text_change"
@@ -1157,7 +1240,7 @@ class OBJECT_OT_position_in_top_right_corner(Operator):
     bl_description = "Position within render, in the top right corner."
     bl_options = {'REGISTER', 'UNDO'}
 
-    def execute(self, context):#, text_object, text=""):
+    def execute(self, context):
         return position_in_top_right_corner(context)
     
     
