@@ -125,17 +125,100 @@ def update_settings_cb(self, context):
     if update_settings_cb.level == False:
         update_settings_cb.level = True
         ps = self
+        rendersettings = context.scene.render
+        render_x_m = pixels_to_printed_m(rendersettings.resolution_x, ps)
+        render_y_m = pixels_to_printed_m(rendersettings.resolution_y, ps)
         pixels_from_print(ps)
+        offset_camera(context)
         if ps.add_scale_ratio_text:
             height_max = ps.width_cm / m_TO_cm
             if ps.text_height > height_max:
                 ps.text_height = height_max
             #elif ps.text_height < height_min:
             #    ps.text_height = height_min
+        if ps.use_margins:
+            # HORIZONTAL
+            margin_left_m = rel_to_abs_m(ps.margin_left, render_x_m)
+            margin_right_m = rel_to_abs_m(ps.margin_right, render_x_m)
+            
+            length_available = render_x_m - margin_right_m
+            # May be considered a bug because it changes relative percentage to an absolute value (does no harm though).
+            if margin_left_m > length_available:
+                ps.margin_left = length_available
+                
+            length_available = render_x_m - margin_left_m
+            # May be considered a bug because it changes relative percentage to an absolute value (does no harm though).
+            if margin_right_m > length_available:
+                ps.margin_right = length_available
+            
+            
+            # VERTICAL
+            margin_top_m = rel_to_abs_m(ps.margin_top, render_y_m)
+            margin_bottom_m = rel_to_abs_m(ps.margin_bottom, render_y_m)
+            
+            length_available = render_y_m - margin_bottom_m
+            # May be considered a bug because it changes relative percentage to an absolute value (does no harm though).
+            if margin_top_m > length_available:
+                ps.margin_top = length_available
+                
+            length_available = render_y_m - margin_top_m
+            # May be considered a bug because it changes relative percentage to an absolute value (does no harm though).
+            if margin_bottom_m > length_available:
+                ps.margin_bottom = length_available
+
         update_settings_cb.level = False
 
 update_settings_cb.level = False
 
+
+
+#
+# First parameter 'rel_or_abs' may be either relative or absolute.
+# If the value is already absolute then it itself is returned.
+#
+def rel_to_abs_m(rel_or_abs, ref_size):
+    margin_m = rel_or_abs 
+    if rel_or_abs >= 1:
+        # relative
+        margin_m = ref_size * rel_or_abs / 100.0
+    return margin_m
+
+
+
+def rel_to_abs_m_vertical(context, rel_or_abs):
+    ps = context.scene.print_settings
+    ref_size = pixels_to_printed_m(context.scene.render.resolution_y, ps)
+    return rel_to_abs_m(rel_or_abs, ref_size)
+
+
+
+def rel_to_abs_m_horizontal(context, rel_or_abs):
+    ps = context.scene.print_settings
+    ref_size = pixels_to_printed_m(context.scene.render.resolution_x, ps)
+    return rel_to_abs_m(rel_or_abs, ref_size)
+
+
+
+def offset_camera(context):
+    ps = context.scene.print_settings
+    if not ps.use_margins:
+        return # no offset required if no margins.
+    camera = context.scene.camera
+    if camera:
+            
+        margin_right_m = ps.margin_right
+        if ps.margin_right >= 1:
+            margin_right_m = pixels_to_printed_m(context.scene.render.resolution_x, ps) * ps.margin_right / 100.0
+        camera.delta_location[0] = ps.margin_left - ps.margin_right
+        
+        margin_top_m = ps.margin_top
+        if ps.margin_top >= 1:
+            margin_top_m = pixels_to_printed_m(context.scene.render.resolution_y, ps) * ps.margin_top / 100.0
+            
+        margin_bottom_m = ps.margin_bottom
+        if ps.margin_bottom >= 1:
+            margin_bottom_m = pixels_to_printed_m(context.scene.render.resolution_y, ps) * ps.margin_bottom / 100.0
+        camera.delta_location[1] = ps.margin_bottom - ps.margin_top
 
 
 
@@ -314,6 +397,7 @@ class RenderPrintSettings(PropertyGroup):
             name="Use margins"
             ,description="Calculate the render size such that margins won't be rendered (results in smaller rendered image)."
             ,default=True
+            ,update=update_settings_cb
     )
     margin_top = FloatProperty(
             name="Top margin"
@@ -321,6 +405,7 @@ class RenderPrintSettings(PropertyGroup):
             ,default=.015 # 1.5cm  #1 # 1%
             ,min=0.0
             ,max=100.0
+            ,update=update_settings_cb
     )
     margin_right = FloatProperty(
             name="Right margin"
@@ -328,6 +413,7 @@ class RenderPrintSettings(PropertyGroup):
             ,default=.015 # 1.5cm  #1 # 1%
             ,min=0.0
             ,max=100.0
+            ,update=update_settings_cb
     )
     margin_bottom = FloatProperty(
             name="Bottom margin"
@@ -335,6 +421,7 @@ class RenderPrintSettings(PropertyGroup):
             ,default=.015 # 1.5cm  #1 # 1%
             ,min=0.0
             ,max=100.0
+            ,update=update_settings_cb
     )
     margin_left = FloatProperty(
             name="Left margin"
@@ -393,8 +480,12 @@ def print2scale(ps, context):
             
             
             longer_side = ps.height_cm / m_TO_cm
+            if ps.use_margins:
+                longer_side = longer_side - ps.margin_top - ps.margin_bottom
             if (ps.width_cm > ps.height_cm): #if (ps.orientation == 'Landscape'):
                 longer_side = ps.width_cm / m_TO_cm
+                if ps.use_margins:
+                    longer_side = longer_side - ps.margin_left - ps.margin_right
 
             #print('old ortho scale: ', context.scene.camera.data.ortho_scale)                
             if not context.scene.camera.data.type == 'ORTHO':
@@ -584,9 +675,9 @@ def position_in_top_left_corner(context, obj=None, ps=None):
     #ps.margin_left_right = 10
     #ps.margin_top_bottom = 10
     ps.margin_left_right = obj.dimensions[0] / 2.0 * ps.scale_factor
-    ps.margin_left_right += ps.margin_right
+    #ps.margin_left_right += ps.margin_right
     ps.margin_top_bottom = obj.dimensions[1] / 2.0 * ps.scale_factor
-    ps.margin_top_bottom += ps.margin_bottom
+    #ps.margin_top_bottom += ps.margin_bottom
     #bpy.ops.object.position_within_render()
     result = position_within_render(context, obj, ps)
     ps.margin_left_right = margin_left_right_old
@@ -609,10 +700,10 @@ def position_in_top_right_corner(context, obj=None, ps=None):
     margin_top_bottom_old = ps.margin_top_bottom
     #ps.margin_left_right = 90 # TODO Depends on object dimensions.
     #ps.margin_top_bottom = 1
-    ps.margin_left_right = ps.width_cm / m_TO_cm - obj.dimensions[0] / 2.0 * ps.scale_factor
-    ps.margin_left_right -= ps.margin_right
+    ps.margin_left_right = pixels_to_printed_m(context.scene.render.resolution_x, ps) - obj.dimensions[0] / 2.0 * ps.scale_factor
+    #ps.margin_left_right -= ps.margin_right
     ps.margin_top_bottom = obj.dimensions[1] / 2.0 * ps.scale_factor
-    ps.margin_top_bottom += ps.margin_bottom
+    #ps.margin_top_bottom += ps.margin_bottom
     #bpy.ops.object.position_within_render()
     result = position_within_render(context, obj, ps)
     ps.margin_left_right = margin_left_right_old
@@ -647,10 +738,10 @@ def position_in_bottom_right_corner(context, obj=None, ps=None):
     # TODO (The object may be rotated relative to the camera, which currently is cleared. Maybe a more general solution should be coded.)
     req_space_max = max(req_space[0], req_space[1], req_space[2])
     #ps.margin_left_right = ps.width_cm / m_TO_cm - req_space_max / 2.0 * ps.scale_factor
-    ps.margin_left_right = ps.width_cm / m_TO_cm - obj.dimensions[0] / 2.0 * ps.scale_factor
-    ps.margin_left_right -= ps.margin_right
-    ps.margin_top_bottom = ps.height_cm / m_TO_cm - obj.dimensions[1] / 2.0 * ps.scale_factor
-    ps.margin_top_bottom -= ps.margin_bottom
+    ps.margin_left_right = pixels_to_printed_m(context.scene.render.resolution_x, ps) - obj.dimensions[0] / 2.0 * ps.scale_factor
+    #ps.margin_left_right -= ps.margin_right
+    ps.margin_top_bottom = pixels_to_printed_m(context.scene.render.resolution_y, ps) - obj.dimensions[1] / 2.0 * ps.scale_factor
+    #ps.margin_top_bottom -= ps.margin_bottom
     #bpy.ops.object.position_within_render()
     result = position_within_render(context, obj, ps)
     ps.margin_left_right = margin_left_right_old
@@ -675,9 +766,9 @@ def position_in_bottom_left_corner(context, obj=None, ps=None):
     #ps.margin_top_bottom = 90
     #ps.margin_left_right = ps.width_cm / m_TO_cm - req_space_max / 2.0 * ps.scale_factor
     ps.margin_left_right = obj.dimensions[0] / 2.0 * ps.scale_factor
-    ps.margin_left_right += ps.margin_right
-    ps.margin_top_bottom = ps.height_cm / m_TO_cm - obj.dimensions[1] / 2.0 * ps.scale_factor
-    ps.margin_top_bottom -= ps.margin_bottom
+    #ps.margin_left_right += ps.margin_right
+    ps.margin_top_bottom = pixels_to_printed_m(context.scene.render.resolution_y, ps) - obj.dimensions[1] / 2.0 * ps.scale_factor
+    #ps.margin_top_bottom -= ps.margin_bottom
     #bpy.ops.object.position_within_render()
     result = position_within_render(context, obj, ps)
     ps.margin_left_right = margin_left_right_old
@@ -713,12 +804,12 @@ def position_within_render(context, obj=None, ps=None):
     #SPACE_PER_CHAR = 2
     # Extra margin also is required because dimensions of a text object can be smaller than the required space, because the center is a bit too far left because chars start farther to the right, e.g. a 1.
     if ps.margin_left_right >= 1.0: # interprete as percentage
-        MARGIN_TO_EDGE_HORIZONTAL = rendersettings.resolution_x / float(ps.dpi) * in_TO_cm / m_TO_cm * ps.margin_left_right / 100.0
+        MARGIN_TO_EDGE_HORIZONTAL = pixels_to_printed_m(context.scene.render.resolution_x, ps) * ps.margin_left_right / 100.0
     else:
         MARGIN_TO_EDGE_HORIZONTAL = ps.margin_left_right
         
     if ps.margin_top_bottom >= 1.0: # interprete as percentage
-        MARGIN_TO_EDGE_VERTICAL = rendersettings.resolution_y / float(ps.dpi) * in_TO_cm / m_TO_cm * ps.margin_top_bottom / 100.0
+        MARGIN_TO_EDGE_VERTICAL = pixels_to_printed_m(context.scene.render.resolution_y, ps) * ps.margin_top_bottom / 100.0
     else:
         MARGIN_TO_EDGE_VERTICAL = ps.margin_top_bottom
    
@@ -780,8 +871,8 @@ def position_within_render(context, obj=None, ps=None):
     # Not to forget that the camera object's rotation is crucial as it influences the direction of the render
     # resolution x and y. So this is TODO if the parenting approach fails but it ain't (inheriting the camera
     # rotation is easiest).
-    x = - ps.width_cm / m_TO_cm / 2.0 + MARGIN_TO_EDGE_HORIZONTAL + req_space_x * ps.scale_factor # Because the object's origin is moved to the center explicitely.
-    y = ps.height_cm / m_TO_cm / 2.0 - req_space_y * ps.scale_factor - MARGIN_TO_EDGE_VERTICAL
+    x = - pixels_to_printed_m(rendersettings.resolution_x, ps) / 2.0 + MARGIN_TO_EDGE_HORIZONTAL + req_space_x * ps.scale_factor # Because the object's origin is moved to the center explicitely.
+    y = pixels_to_printed_m(rendersettings.resolution_y, ps) / 2.0 - MARGIN_TO_EDGE_VERTICAL - req_space_y * ps.scale_factor
     print("x: %s y: %s scale_factor: %s " % (x, y, ps.scale_factor))
     #if ps.scale_factor >= 1.0:
     x /= ps.scale_factor
@@ -1053,7 +1144,7 @@ in_TO_cm = 2.54 # conversion factor
 
 #def printed_distance_to_pixel(resulting_distance_m):
 def printed_m_to_pixels(m, ps): # inline function
-    return round((m * ps.dpi) / in_TO_cm * m_TO_cm)
+    return round(m * m_TO_cm / in_TO_cm * float(ps.dpi))
     
 
 
@@ -1061,7 +1152,7 @@ def derive_width_pixels(ps):
     m = ps.width_cm / m_TO_cm
     if ps.use_margins:
         m = m - ps.margin_left - ps.margin_right
-    ps.width_px = printed_m_to_pixels(m, ps)
+    ps.width_px = max(printed_m_to_pixels(m, ps), 4)
 
 
 
@@ -1069,7 +1160,12 @@ def derive_height_pixels(ps):
     m = ps.height_cm / m_TO_cm
     if ps.use_margins:
         m = m - ps.margin_top - ps.margin_bottom
-    ps.height_px = printed_m_to_pixels(m, ps)
+    ps.height_px = max(printed_m_to_pixels(m, ps), 4)
+
+
+
+def pixels_to_printed_m(pixel, ps):
+    return float(pixel) / float(ps.dpi) * in_TO_cm / m_TO_cm
 
 
 
@@ -1095,8 +1191,12 @@ def pixels_from_print(ps):
             derive_width_pixels(ps) 
             derive_height_pixels(ps) 
         else: #PIXELS_TO_CM
-            ps.width_cm = (ps.width_px / ps.dpi) * in_TO_cm + ps.margin_left * m_TO_cm + ps.margin_right * m_TO_cm
-            ps.height_cm = (ps.height_px / ps.dpi) * in_TO_cm + ps.margin_top * m_TO_cm + ps.margin_bottom * m_TO_cm
+            ps.width_cm = float(ps.width_px) / float(ps.dpi) * in_TO_cm
+            ps.height_cm = float(ps.height_px) / float(ps.dpi) * in_TO_cm
+            if ps.use_margins:
+                ps.width_cm += ps.margin_left * m_TO_cm + ps.margin_right * m_TO_cm
+            if ps.use_margins:
+                ps.height_cm += ps.margin_top * m_TO_cm + ps.margin_bottom * m_TO_cm
 
 
 
@@ -1323,8 +1423,8 @@ class RENDER_OT_apply_print_settings(Operator):
         pixels_from_print(ps)
 
         render = scene.render
-        render.resolution_x = ps.width_px
-        render.resolution_y = ps.height_px
+        render.resolution_x = max(ps.width_px, 4)
+        render.resolution_y = max(ps.height_px, 4)
         
         print2scale(ps, context)
 
