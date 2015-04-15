@@ -275,378 +275,192 @@ def print2scale_processInput(self, context):
 
 
 
-
-class RenderPrintSettings(PropertyGroup):
-    update_manually = BoolProperty(
-            name="Update manually"
-            ,description="If enabled apply settings manually instead of realtime update."
-            ,default=False
-            ,update=update_settings_cb
-    )
-    
-    unit_from = EnumProperty(
-            name="Set from",
-            description="Set from",
-            items=(
-                ("CM_TO_PIXELS", "CM -> Pixel", "Centermeters to Pixels"),
-                ("PIXELS_TO_CM", "Pixel -> CM", "Pixels to Centermeters")
-                ),
-            default="CM_TO_PIXELS",
-            )
-    orientation = EnumProperty(
-            name="Page Orientation",
-            description="Set orientation",
-            items=(
-                ("Portrait", "Portrait", "Portrait"),
-                ("Landscape", "Landscape", "Landscape")
-            ),
-            default="Portrait",
-            update=update_settings_cb,
-            )
-    preset = EnumProperty(
-            name="Select Preset",
-            description="Select from preset",
-            items=paper_presets,
-            default="custom_1_1",
-            update=update_settings_cb,
-            )
-    dpi = IntProperty(
-            name="DPI",
-            description="Dots per Inch",
-            default=300,
-            min=72, max=1800,
-            update=update_settings_cb,
-            )
-    width_cm = FloatProperty(
-            name="Width",
-            description="Width in CM",
-            default=5.0,
-            min=1.0, max=100000.0,
-            update=update_settings_cb,
-            )
-    height_cm = FloatProperty(
-            name="Height",
-            description="Height in CM",
-            default=3.0,
-            min=1.0, max=100000.0,
-            update=update_settings_cb,
-            )
-    width_px = IntProperty(
-            name="Pixel Width",
-            description="Pixel Width",
-            default=900,
-            min=4, max=10000,
-            update=update_settings_cb,
-            )
-    height_px = IntProperty(
-            name="Pixel Height",
-            description="Pixel Height",
-            default=600,
-            min=4, max=10000,
-            update=update_settings_cb,
-            )
-    #PRINT TO SCALE
-    print_to_scale = BoolProperty(
-            name="Print to scale"
-            ,description="Print to scale by automatically calculate the correct distance of the camera to the object or the center of scene."
-            ,default=True
-            #,update=print2scale_reset_camera_focal_length_or_orthographic_scale
-    )
-    # Remapping probably will lead to much confusion. e.g. model 10 -> 1 on the plan means the output will be a model copy 10 times smaller.
-    # Many architects will accidentally fill in 1:10 instead because they forget that here the ratio is (model:plan) and not (plan:model) like printed
-    # on the plan. So unfortunately this will cost a lot of trees as the prints in that a size will be rendered useless.
-    # => SO NOW WE USE SCALE FACTOR ONLY! THAT'S MUCH MORE INTUITIVE AND IS NOTHING ELSE than print ratio but without the confusion.
-    #in_print2scale_scale_remap_source_model = IntProperty(
-    #        name="Model - Print ratio denominator (Model, Map source)"
-    #        ,description="If the model value is greater than the real world value (e.g. 2:1) then the printed output will be scaled down to 1/2 the model size. is e.g. 10 and the real world value 1, then we have a print ratio of 10:1, that is 10 model units print to 1 real world unit. So a 10m model becomes 1m. Thus the printed plan is to scale in a ratio of 1:10 (while the model is in the opposite ratio of 10:1)."
-    #        ,default=1
-    #        ,min=1
-    #        ,max=10000
-    #        ,update=print2scale_recalculate_camera_focal_length_or_orthographic_scale
-    #)
-    #in_print2scale_scale_remap_target_printed = IntProperty(
-    
-    # NOTE:
-    # The print ratio is nothing else than a scale factor. E.g. 1:10 on a plan means the original real measurements are scaled down by factor 10.
-    # ATTENTION:
-    # Precondition is that the 3D model must be modelled to scale. Only then printing a plan to scale, scaled down or up, gives meaningful dimensions.
-    # E.g. if a 1m long wing is modelled with 1mm length in blender instead, then it has to be printed with a 1000:1 for a 1:1 scale on a 1m sheet
-    # or 100:1 on a 1/10m sheet, resulting in a factor of 1:10. Unfortunately the program can't know if the model now really is that small (1mm) or
-    # not and labels the plan as 100:1 in scale - obviously confusing all engineers and architects involved.
-    # Either scaling the model up or changing the unit settings scale can solve this. From experience the first approach can prove difficult
-    # as this can lead to strange behaviour of modifiers and any kind of relationsships of objects of the model - often messing up the complete model.
-    # The latter - changing the unit settings - is okay, but results in modularity problems if this setting is different in each scene,
-    # so when finally importing one model into another scene, a lot of new problems arise. Also problematic are discrepancies in the grid and blender's
-    # buildin-measurement functionality (N panel, e.g. edge info) as well as the bullet engine or other features that rely on physically accurate units
-    # (and from what reason ever (there are plenty!) don't take the unit scale into account correctly).
-    # The loss of modularity is such a big problem that it's good to know that all this trouble can be avoided by simply modelling to scale.
-    # (While model accuracy might prove inaccurate if modelling to scale without scaling up the model as the grids resolution is limited! So there is no silverbullet.)
-    scale_factor = FloatProperty(
-            name="Print scale factor"
-            ,description="Scale big models down (scale factor <1) or tiny models up (scale facot >1). E.g. 10 results in scaling up tenfold, a 1meter model will fill 10m on a giant sheet of papyrus when printed out with this setting. On the other hand 0.1 = 1/10 results in a 1:10 plan being printed."
-            ,default=1
-            ,min=0.00000001 #If zero is possible, problems will arise due to division by zero!
-            ,max=10000
-            ,update=print2scale#_recalculate_camera_focal_length_or_orthographic_scale
-    )
-    #cache_scale_ratio_text_object = None # ObjectProperty or ReferenceProperty
-    add_scale_ratio_text = BoolProperty(
-            name="Add scale ratio text."
-            ,description="Whether to add a text representation of the scale factor (as ratio) or not."
-            ,default=True
-            ,update=print2scale#_reset_camera_focal_length_or_orthographic_scale
-    )
-    # Remapping probably will lead to much confusion. e.g. model 10 -> 1 on the plan means the output will be a model copy 10 times smaller.
-    # Many architects will accidentally fill in 1:10 instead because they forget that here the ratio is (model:plan) and not (plan:model) like printed
-    text_height = FloatProperty(
-            name="Text height."
-            ,description="Text height as printed. Given in Standard International units. Defaults to 1cm if zero."
-            ,default=.005 # m = .5cm = 5mm
-            ,min=0.0
-            ,max=100.0 # 100m is quite huge already, even for graffity.
-            #,update=ensure_height <- if text object is selected and active. 
-            ,update=update_settings_cb
-    )
-    
-    # Margins for printers that require a blank border (due to technical or visual reasons):
-    use_margins = BoolProperty(
-            name="Use margins"
-            ,description="Calculate the render size such that margins won't be rendered (results in smaller rendered image)."
-            ,default=True
-            ,update=update_settings_cb
-    )
-    margin_top = FloatProperty(
-            name="Top margin"
-            ,description="Blank space from the top paper edge."
-            ,default=.015 # 1.5cm  #1 # 1%
-            ,min=0.0
-            ,max=100.0
-            ,update=update_settings_cb
-    )
-    margin_right = FloatProperty(
-            name="Right margin"
-            ,description="Blank space from the right paper edge."
-            ,default=.015 # 1.5cm  #1 # 1%
-            ,min=0.0
-            ,max=100.0
-            ,update=update_settings_cb
-    )
-    margin_bottom = FloatProperty(
-            name="Bottom margin"
-            ,description="Blank space from the bottom paper edge."
-            ,default=.015 # 1.5cm  #1 # 1%
-            ,min=0.0
-            ,max=100.0
-            ,update=update_settings_cb
-    )
-    margin_left = FloatProperty(
-            name="Left margin"
-            ,description="Blank space from the left paper edge."
-            ,default=.015 # 1.5cm  #1 # 1%
-            ,min=0.0
-            ,max=100.0
-    )
-    
-    
-    # Position within render:
-    margin_top_bottom = FloatProperty(
-            name="Vertical margin"
-            ,description="Distance to top, bottom edges. Interpreted as percentage if >= 1."
-            ,default=1 # 1%
-            ,min=0.0
-            ,max=100.0
-    )
-    margin_left_right = FloatProperty(
-            name="Horizontal margin"
-            ,description="Distance to left, right edges. Interpreted as percentage if >= 1."
-            ,default=1 # 1%
-            ,min=0.0
-            ,max=100.0
-            #,update=position_within_render <- requires parameters.
-    )
-
-
-            
 def print2scale(ps, context):
-        #--------------------------------------------------------
-        #print2scale
-        #--------------------------------------------------------
-        if (ps.print_to_scale):
-            
-            if (context.scene.objects.active != None and (context.scene.objects.active.type == 'OBJECT' or context.scene.objects.active.type == 'MESH')):
-                bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
-                print('Switched to Object mode.')
-            else:
-                if (context.mode != 'OBJECT'):
-                    print('Warning: Switched not to Object mode but are in Edit mode.')
-            
+    print2scale__calculate_camera_paramaters(ps, context)
+    print2scale_add_update_text(ps, context)
 
-            find_or_create_camera_and_assign(context)
-            #
-            #At this point the scene must have a camera.
-            #
-            
-            #######
-            # SET THE CAMERA's ZOOM OR ORTHOGRAPHIC SCALE
-            #######
-            aspect_ratio = ps.height_cm / ps.width_cm #as it's a ratio converting to meter or not does not matter here!
-            if (not context.scene.camera.type == 'CAMERA'):
-                print("Camera does not have type 'CAMERA', instead: ", context.scene.camera.type)
-                return {'CANCELLED'}
-            
-            
-            longer_side = ps.height_cm / m_TO_cm
-            
+
+def print2scale__calculate_camera_paramaters(ps, context):
+    if (ps.print_to_scale):
+        
+        if (context.scene.objects.active != None and (context.scene.objects.active.type == 'OBJECT' or context.scene.objects.active.type == 'MESH')):
+            bpy.ops.object.mode_set(mode='OBJECT', toggle=False)
+            print('Switched to Object mode.')
+        else:
+            if (context.mode != 'OBJECT'):
+                print('Warning: Switched not to Object mode but are in Edit mode.')
+        
+
+        find_or_create_camera_and_assign(context)
+        #
+        # At this point the scene must have a camera.
+        #
+        
+        #######
+        # SET THE CAMERA's ZOOM OR ORTHOGRAPHIC SCALE
+        #######
+        aspect_ratio = ps.height_cm / ps.width_cm #as it's a ratio converting to meter or not does not matter here!
+        if (not context.scene.camera.type == 'CAMERA'):
+            print("Camera does not have type 'CAMERA', instead: ", context.scene.camera.type)
+            return {'CANCELLED'}
+        
+        
+        longer_side = ps.height_cm / m_TO_cm
+        
+        if ps.use_margins:
+            margin_top_m = rel_to_abs_m(
+                    ps.margin_top, 
+                    pixels_to_printed_m(context.scene.render.resolution_y, ps)
+                    )
+            margin_bottom_m = rel_to_abs_m(
+                    ps.margin_bottom, 
+                    pixels_to_printed_m(context.scene.render.resolution_y, ps)
+                    )
+            longer_side = longer_side - margin_top_m - margin_bottom_m
+        if (ps.width_cm > ps.height_cm): #if (ps.orientation == 'Landscape'):
+            longer_side = ps.width_cm / m_TO_cm
             if ps.use_margins:
-                margin_top_m = rel_to_abs_m(
-                        ps.margin_top, 
-                        pixels_to_printed_m(context.scene.render.resolution_y, ps)
-                        )
-                margin_bottom_m = rel_to_abs_m(
-                        ps.margin_bottom, 
-                        pixels_to_printed_m(context.scene.render.resolution_y, ps)
-                        )
-                longer_side = longer_side - margin_top_m - margin_bottom_m
-            if (ps.width_cm > ps.height_cm): #if (ps.orientation == 'Landscape'):
-                longer_side = ps.width_cm / m_TO_cm
-                if ps.use_margins:
-                    margin_left_m = rel_to_abs_m(
+                margin_left_m = rel_to_abs_m(
                         ps.margin_left, 
                         pixels_to_printed_m(context.scene.render.resolution_x, ps)
                         )
-                    margin_right_m = rel_to_abs_m(
+                margin_right_m = rel_to_abs_m(
                         ps.margin_right, 
                         pixels_to_printed_m(context.scene.render.resolution_x, ps)
                         )
-                    longer_side = longer_side - margin_left_m - margin_right_m
+                longer_side = longer_side - margin_left_m - margin_right_m
 
-            #print('old ortho scale: ', context.scene.camera.data.ortho_scale)                
-            if not context.scene.camera.data.type == 'ORTHO':
-                context.scene.camera.data.type = 'ORTHO'
-            zoom_result = 1 # May result in too big a text representation of the scale ratio but better than too small (can resize later). 
-            if context.scene.camera.data.type == 'ORTHO':    #ORTHO, PANO, PERSP
-                #blenderartists.org/forum/showthread.php?257556-Render-to-Scale-in-Blender-using-the-Render-to-Print-addon-!
-                #They use the magic number 1.3648 - wonder why, its origin needs to be determined.
-                #     Orthographic_scale                = 1.3648 x L_format_real x L_real / L_virtual
-                # <=> Orthographic_scale * scale_factor = 1.3648 x L_format_real 
-                # <=> Orthographic_scale * scale_factor = H_format_real
-                #                                                       where L_real = scale factor * L_virtual
-                #And as the orthographic scale does not take the Scene.unit_settings scale_length into account (for some reason?):
-                # The H_format_real now in the model has to be 'unscaled' too for consistency as the model is scaled with the scale_length setting
-                # too while strangely the orthographic is not scaled, so the right hand side will also be divided by the scale to make it equal again:
-                # <=> Orthographic_scale * scale_factor = H_format_real / unit_settings_scale_length
-                # <=> Orthographic_scale = H_format_real / unit_settings_scale_length / scale_factor
-                #
-                #print('unit setting: ', context.scene.unit_settings.scale_length, ' longer_side in meters: ', longer_side)
-                context.scene.camera.data.ortho_scale = (longer_side / context.scene.unit_settings.scale_length) / ps.scale_factor
-                zoom_result = context.scene.camera.data.ortho_scale
+        #print('old ortho scale: ', context.scene.camera.data.ortho_scale)                
+        if not context.scene.camera.data.type == 'ORTHO':
+            context.scene.camera.data.type = 'ORTHO'
+        zoom_result = 1 # May result in too big a text representation of the scale ratio but better than too small (can resize later). 
+        if context.scene.camera.data.type == 'ORTHO':    #ORTHO, PANO, PERSP
+            #blenderartists.org/forum/showthread.php?257556-Render-to-Scale-in-Blender-using-the-Render-to-Print-addon-!
+            #They use the magic number 1.3648 - wonder why, its origin needs to be determined.
+            #     Orthographic_scale                = 1.3648 x L_format_real x L_real / L_virtual
+            # <=> Orthographic_scale * scale_factor = 1.3648 x L_format_real 
+            # <=> Orthographic_scale * scale_factor = H_format_real
+            #                                                       where L_real = scale factor * L_virtual
+            #And as the orthographic scale does not take the Scene.unit_settings scale_length into account (for some reason?):
+            # The H_format_real now in the model has to be 'unscaled' too for consistency as the model is scaled with the scale_length setting
+            # too while strangely the orthographic is not scaled, so the right hand side will also be divided by the scale to make it equal again:
+            # <=> Orthographic_scale * scale_factor = H_format_real / unit_settings_scale_length
+            # <=> Orthographic_scale = H_format_real / unit_settings_scale_length / scale_factor
+            #
+            #print('unit setting: ', context.scene.unit_settings.scale_length, ' longer_side in meters: ', longer_side)
+            context.scene.camera.data.ortho_scale = (longer_side / context.scene.unit_settings.scale_length) / ps.scale_factor
+            zoom_result = context.scene.camera.data.ortho_scale
+            
                 
-                
-            elif (context.scene.camera.data.type == 'PERSP'):
-                #TODO: somehow involve the location and the field of view!
-                context.scene.camera.data.focal_length = (longer_side / context.scene.unit_settings.scale_length) / ps.scale_factor
-                zoom_result = context.scene.camera.data.focal_length
+        elif (context.scene.camera.data.type == 'PERSP'):
+            #TODO: somehow involve the location and the field of view!
+            context.scene.camera.data.focal_length = (longer_side / context.scene.unit_settings.scale_length) / ps.scale_factor
+            zoom_result = context.scene.camera.data.focal_length
 
-            #else:
-                #PANO
-                #TODO
-                
-            #print('new ortho scale: ', context.scene.camera.data.ortho_scale)
-        
-        
-        
-            ########
-            # UPDATE THE TEXT OF THE SCALE RATIO TEXT OBJECT.
-            #######
-            # Somehow this always gives None. So much to the topic scripting languages are quicker and while python is great, C/C++ would be straight forward.
-            #if (hasattr(ps, 'cache_scale_ratio_text_object')):
-            #    print('cache is: ' + str(ps.cache_scale_ratio_text_object))
-            #if (not hasattr(ps, 'cache_scale_ratio_text_object') or not ps.cache_scale_ratio_text_object):
-            scale_ratio_text_object = None
-            for o in context.scene.camera.children:
+        #else:
+            #PANO
+            #TODO
+            
+        #print('new ortho scale: ', context.scene.camera.data.ortho_scale)
+
+
+
+def print2scale_add_update_text(ps, context):
+    #ps = context.scene.print_settings
+    if (ps.print_to_scale):
+        ########
+        # UPDATE THE TEXT OF THE SCALE RATIO TEXT OBJECT.
+        #######
+        # Somehow this always gives None. So much to the topic scripting languages are quicker and while python is great, C/C++ would be straight forward.
+        #if (hasattr(ps, 'cache_scale_ratio_text_object')):
+        #    print('cache is: ' + str(ps.cache_scale_ratio_text_object))
+        #if (not hasattr(ps, 'cache_scale_ratio_text_object') or not ps.cache_scale_ratio_text_object):
+        scale_ratio_text_object = None
+        for o in context.scene.camera.children:
+            # to allow other text/font objects as camera children, check for scale_ratio too:
+            if (o and o.type == 'FONT' and o.name.find('scale_ratio') != -1):
+                scale_ratio_text_object = o
+                break
+        set_camera_as_parent = False
+        if not scale_ratio_text_object:
+            for o in context.scene.objects:
                 # to allow other text/font objects as camera children, check for scale_ratio too:
                 if (o and o.type == 'FONT' and o.name.find('scale_ratio') != -1):
                     scale_ratio_text_object = o
+                    set_camera_as_parent = True # because it's not yet been parented.
                     break
-            set_camera_as_parent = False
-            if not scale_ratio_text_object:
-                for o in context.scene.objects:
-                    # to allow other text/font objects as camera children, check for scale_ratio too:
-                    if (o and o.type == 'FONT' and o.name.find('scale_ratio') != -1):
-                        scale_ratio_text_object = o
-                        set_camera_as_parent = True # because it's not yet been parented.
-                        break
             
-            if (not scale_ratio_text_object and ps.add_scale_ratio_text):
-                # Add a text for the scale factor e.g. 1:10 on the print.
-                scale_ratio_text_object = add_text(context, object_name="scale_ratio")
-                scale_ratio_text_object.location[0] = 0
-                scale_ratio_text_object.location[1] = 0
-                scale_ratio_text_object.location[2] = 0
-                # Scale the object to be visible depending on the chosen scale ratio
-                # (which relates to the render size and object dimensions/scale used for modeling).
-                # The smaller the scale_factor (e.g. 1:50 = 1/50) the farther away the camera will appear.
-                # Thus the more the text object must be scaled up to compensate.
-                # Take format => dimensions into account.
-                # It's 1/10 blender unit away in negative z-direction when using the parenting approach. (TODO This z-direction distance must be taken into account should printing to scale with perspective camera ever be supported in the future.)
-                # It should be readable when printed out, thus the format/size (A4, A3, ..) must be read to know
-                # if setting it to 1/1000 of the space available will suffice. For A4
-                #object_scale = .01 * zoom_result  # figured by experimenting.
-                #text_object.scale.x = object_scale * ps.scale_factor
-                #text_object.scale.y = object_scale * ps.scale_factor
-                #text_object.scale.z = object_scale * ps.scale_factor
-                set_camera_as_parent = True
-                
-            if scale_ratio_text_object and set_camera_as_parent:
-                set_parent(context, to_be_child_objects=[scale_ratio_text_object], parent_object=context.scene.camera)
-                
-                ######
-                # ADD TRACK TO CONSTRAINT (enable and debug if parenting approach above fails)
-                # If enabled then increase distance of the object to the camera. 
-                ######
-                # Make sure nothing is selected:
-                bpy.ops.object.select_all(action='DESELECT')
-                ## Add track to contraint to properly align the text object towards the camera even if the camera position changed and the scale ratio text object is reused:
-                ## Select the objects that shall be looked to:
-                #context.scene.camera.select = True
-                ## Select the object where the modifier/is added and set it as active object:  
-                #context.scene.objects.active = scale_ratio_text_object
-                #context.scene.objects.active.select = True
-                
-                ## Add a constraint to the active object with the selected object(s) as target(s):
-                #bpy.ops.object.constraint_add_with_targets(type='TRACK_TO')
-                #track_to = scale_ratio_text_object.constraints[-1]
-                #track_to.up_axis = 'UP_Y'
-                #track_to.track_axis = 'TRACK_Z'
-                
-                 
-                scale_ratio_text_object.select = True
-                context.scene.objects.active = scale_ratio_text_object
+        if (not scale_ratio_text_object and ps.add_scale_ratio_text):
+            # Add a text for the scale factor e.g. 1:10 on the print.
+            scale_ratio_text_object = add_text(context, object_name="scale_ratio")
+            scale_ratio_text_object.location[0] = 0
+            scale_ratio_text_object.location[1] = 0
+            scale_ratio_text_object.location[2] = 0
+            # Scale the object to be visible depending on the chosen scale ratio
+            # (which relates to the render size and object dimensions/scale used for modeling).
+            # The smaller the scale_factor (e.g. 1:50 = 1/50) the farther away the camera will appear.
+            # Thus the more the text object must be scaled up to compensate.
+            # Take format => dimensions into account.
+            # It's 1/10 blender unit away in negative z-direction when using the parenting approach. (TODO This z-direction distance must be taken into account should printing to scale with perspective camera ever be supported in the future.)
+            # It should be readable when printed out, thus the format/size (A4, A3, ..) must be read to know
+            # if setting it to 1/1000 of the space available will suffice. For A4
+            #object_scale = .01 * zoom_result  # figured by experimenting.
+            #text_object.scale.x = object_scale * ps.scale_factor
+            #text_object.scale.y = object_scale * ps.scale_factor
+            #text_object.scale.z = object_scale * ps.scale_factor
+            set_camera_as_parent = True
             
-            #######
-            # Update scale ratio factor:
-            if scale_ratio_text_object and not ps.add_scale_ratio_text:
-                # Remove the text object:
-                #objects_to_be_deleted.append(scale_ratio_text_object)
-                bpy.ops.object.select_all(action='DESELECT')
-                context.scene.objects.active = scale_ratio_text_object
-                context.scene.objects.active.select = True
-                bpy.ops.object.delete()
-                return {'FINISHED'}
+        if scale_ratio_text_object and set_camera_as_parent:
+            set_parent(context, to_be_child_objects=[scale_ratio_text_object], parent_object=context.scene.camera)
             
-            elif not scale_ratio_text_object:
-                print("Warning: No scale ratio text object.")
-                return {'FINISHED'}
+            ######
+            # ADD TRACK TO CONSTRAINT (enable and debug if parenting approach above fails)
+            # If enabled then increase distance of the object to the camera. 
+            ######
+            # Make sure nothing is selected:
+            bpy.ops.object.select_all(action='DESELECT')
+            ## Add track to contraint to properly align the text object towards the camera even if the camera position changed and the scale ratio text object is reused:
+            ## Select the objects that shall be looked to:
+            #context.scene.camera.select = True
+            ## Select the object where the modifier/is added and set it as active object:  
+            #context.scene.objects.active = scale_ratio_text_object
+            #context.scene.objects.active.select = True
             
-            #else:
-            scale_ratio_text_object.layers = list(LAYERS_ALL)
-            scale_ratio_text = convertScaleFactorToRatioString(scale_factor=ps.scale_factor);
-            change_text(context, scale_ratio_text_object, scale_ratio_text)
-            ensure_height(obj=scale_ratio_text_object, print_settings=ps)
-            #position_in_top_right_corner(context, obj=scale_ratio_text_object, ps=ps)
-            # for more flexibility let the margins be chosen freely:
-            position_within_render(context, obj=scale_ratio_text_object, ps=ps)
-            
+            ## Add a constraint to the active object with the selected object(s) as target(s):
+            #bpy.ops.object.constraint_add_with_targets(type='TRACK_TO')
+            #track_to = scale_ratio_text_object.constraints[-1]
+            #track_to.up_axis = 'UP_Y'
+            #track_to.track_axis = 'TRACK_Z'
+           
+             
+            scale_ratio_text_object.select = True
+            context.scene.objects.active = scale_ratio_text_object
+        
+        #######
+        # Update scale ratio factor:
+        if scale_ratio_text_object and not ps.add_scale_ratio_text:
+            # Remove the text object:
+            #objects_to_be_deleted.append(scale_ratio_text_object)
+            bpy.ops.object.select_all(action='DESELECT')
+            context.scene.objects.active = scale_ratio_text_object
+            context.scene.objects.active.select = True
+            bpy.ops.object.delete()
+            return {'FINISHED'}
+        
+        elif not scale_ratio_text_object:
+            print("Warning: No scale ratio text object.")
+            return {'FINISHED'}
+        
+        #else:
+        scale_ratio_text_object.layers = list(LAYERS_ALL)
+        scale_ratio_text = convertScaleFactorToRatioString(scale_factor=ps.scale_factor);
+        change_text(context, scale_ratio_text_object, scale_ratio_text)
+        ensure_height(obj=scale_ratio_text_object, print_settings=ps)
+        #position_in_top_right_corner(context, obj=scale_ratio_text_object, ps=ps)
+        # for more flexibility let the margins be chosen freely:
+        position_within_render(context, obj=scale_ratio_text_object, ps=ps)
+        # Note this call can lead to endless recursion if width_px or height_px differ from resolution_x.
+
 
 
 def find_or_create_camera_and_assign(context):
@@ -696,6 +510,23 @@ def set_parent(context, to_be_child_objects, parent_object):
 
 
 
+def is_out_of_sync(context):
+    ps = context.scene.print_settings
+    
+    # TODO Update once perspective camera support is added.
+    if ps.width_px != context.scene.render.resolution_x or ps.height_px != context.scene.render.resolution_y:
+        return True
+    
+    if not ps.print_to_scale:
+        return True
+
+    if not context.scene.camera or context.scene.camera.type != 'ORTHO':# or ps.camera_zoom_cache != context.scene.camera.ortho_scale: TODO Cache the camera parameter calculation result?
+        print2scale__calculate_camera_paramaters(ps, context) # <- Currently required until the scale ratio -> camera orthographic/perspective scale calculation result is cached?
+
+    return False
+
+
+
 def position_in_top_left_corner(context, obj=None, ps=None):
     if not ps:
         ps = context.scene.print_settings
@@ -705,6 +536,10 @@ def position_in_top_left_corner(context, obj=None, ps=None):
     
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
+    
+    if is_out_of_sync(context):
+        bpy.ops.render.apply_print_settings()
+        
     #ps.margin_left_right = 10
     #ps.margin_top_bottom = 10
     ps.margin_left_right = obj.dimensions[0] / 2.0 * ps.scale_factor
@@ -726,16 +561,17 @@ def position_in_top_right_corner(context, obj=None, ps=None):
         obj = context.scene.objects.active
     find_or_create_camera_and_assign(context)
     
-    if ps.width_px != context.scene.render.resolution_x or ps.height_px != context.scene.render.resolution_y:
-        bpy.ops.render.apply_print_settings()
-    
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
+    
+    if is_out_of_sync(context):
+        bpy.ops.render.apply_print_settings()
+    
     #ps.margin_left_right = 90 # TODO Depends on object dimensions.
     #ps.margin_top_bottom = 1
-    ps.margin_left_right = pixels_to_printed_m(context.scene.render.resolution_x, ps) - obj.dimensions[0] / 2.0 * ps.scale_factor
+    ps.margin_left_right = pixels_to_printed_m(context.scene.render.resolution_x, ps) - obj.dimensions[0] * ps.scale_factor
     #ps.margin_left_right -= ps.margin_right
-    ps.margin_top_bottom = obj.dimensions[1] / 2.0 * ps.scale_factor
+    ps.margin_top_bottom = 0#obj.dimensions[1] / 2.0 * ps.scale_factor
     #ps.margin_top_bottom += ps.margin_bottom
     #bpy.ops.object.position_within_render()
     result = position_within_render(context, obj, ps)
@@ -752,11 +588,12 @@ def position_in_bottom_right_corner(context, obj=None, ps=None):
         obj = context.scene.objects.active
     find_or_create_camera_and_assign(context)
     
-    if ps.width_px != context.scene.render.resolution_x or ps.height_px != context.scene.render.resolution_y:
-        bpy.ops.render.apply_print_settings()
-    
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
+    
+    if is_out_of_sync(context):
+        bpy.ops.render.apply_print_settings()
+    
     #ps.margin_left_right = 90 # 
     #ps.margin_top_bottom = 90
     smallest_index, second_largest_index, largest_index = get_smallest_central_and_largest(obj.dimensions)
@@ -771,9 +608,9 @@ def position_in_bottom_right_corner(context, obj=None, ps=None):
     # TODO (The object may be rotated relative to the camera, which currently is cleared. Maybe a more general solution should be coded.)
     req_space_max = max(req_space[0], req_space[1], req_space[2])
     #ps.margin_left_right = ps.width_cm / m_TO_cm - req_space_max / 2.0 * ps.scale_factor
-    ps.margin_left_right = pixels_to_printed_m(context.scene.render.resolution_x, ps) - obj.dimensions[0] / 2.0 * ps.scale_factor
+    ps.margin_left_right = pixels_to_printed_m(context.scene.render.resolution_x, ps) - obj.dimensions[0] * ps.scale_factor
     #ps.margin_left_right -= ps.margin_right
-    ps.margin_top_bottom = pixels_to_printed_m(context.scene.render.resolution_y, ps) - obj.dimensions[1] / 2.0 * ps.scale_factor
+    ps.margin_top_bottom = pixels_to_printed_m(context.scene.render.resolution_y, ps) - obj.dimensions[1] * ps.scale_factor
     #ps.margin_top_bottom -= ps.margin_bottom
     #bpy.ops.object.position_within_render()
     result = position_within_render(context, obj, ps)
@@ -790,17 +627,18 @@ def position_in_bottom_left_corner(context, obj=None, ps=None):
         obj = context.scene.objects.active
     find_or_create_camera_and_assign(context)
     
-    if ps.width_px != context.scene.render.resolution_x or ps.height_px != context.scene.render.resolution_y:
-        bpy.ops.render.apply_print_settings()
-        
     margin_left_right_old = ps.margin_left_right
     margin_top_bottom_old = ps.margin_top_bottom
+    
+    if is_out_of_sync(context):
+        bpy.ops.render.apply_print_settings()
+        
     #ps.margin_left_right = 1
     #ps.margin_top_bottom = 90
     #ps.margin_left_right = ps.width_cm / m_TO_cm - req_space_max / 2.0 * ps.scale_factor
-    ps.margin_left_right = obj.dimensions[0] / 2.0 * ps.scale_factor
+    ps.margin_left_right = 0#obj.dimensions[0] / 2.0 * ps.scale_factor
     #ps.margin_left_right += ps.margin_right
-    ps.margin_top_bottom = pixels_to_printed_m(context.scene.render.resolution_y, ps) - obj.dimensions[1] / 2.0 * ps.scale_factor
+    ps.margin_top_bottom = pixels_to_printed_m(context.scene.render.resolution_y, ps) - obj.dimensions[1] * ps.scale_factor
     #ps.margin_top_bottom -= ps.margin_bottom
     #bpy.ops.object.position_within_render()
     result = position_within_render(context, obj, ps)
@@ -824,7 +662,7 @@ def position_within_render(context, obj=None, ps=None):
         ps = context.scene.print_settings
     find_or_create_camera_and_assign(context)
     
-    if ps.width_px != context.scene.render.resolution_x or ps.height_px != context.scene.render.resolution_y:
+    if is_out_of_sync(context):
         print(ps.width_px, context.scene.render.resolution_x, ps.height_px, context.scene.render.resolution_y)
         bpy.ops.render.apply_print_settings()
         
@@ -982,6 +820,7 @@ def position_within_render(context, obj=None, ps=None):
     
     if active_old:
         context.scene.objects.active = active_old
+        
     return {'FINISHED'}
 
 
@@ -1146,6 +985,7 @@ def ensure_height(obj, print_settings, resulting_height=0.0):
     return {'FINISHED'}
 
 
+
 def convertScaleFactorToRatioString(scale_factor, precision=2):
     text = None
     if (scale_factor < 1):
@@ -1246,6 +1086,9 @@ def pixels_from_print(context, ps):
                         pixels_to_printed_m(context.scene.render.resolution_y, ps)
                         )
                 ps.height_cm += margin_top_m * m_TO_cm + margin_bottom_m * m_TO_cm
+
+
+
 
 
 
@@ -1466,6 +1309,203 @@ class RENDER_OT_ensure_height(Operator):
 
     def execute(self, context):#, resulting_height, obj):
         return ensure_height(obj=context.scene.objects.active, print_settings=context.scene.print_settings)
+
+
+
+
+
+
+class RenderPrintSettings(PropertyGroup):
+    update_manually = BoolProperty(
+            name="Update manually"
+            ,description="If enabled apply settings manually instead of realtime update."
+            ,default=False
+            ,update=update_settings_cb
+    )
+    
+    unit_from = EnumProperty(
+            name="Set from",
+            description="Set from",
+            items=(
+                ("CM_TO_PIXELS", "CM -> Pixel", "Centermeters to Pixels"),
+                ("PIXELS_TO_CM", "Pixel -> CM", "Pixels to Centermeters")
+                ),
+            default="CM_TO_PIXELS",
+            )
+    orientation = EnumProperty(
+            name="Page Orientation",
+            description="Set orientation",
+            items=(
+                ("Portrait", "Portrait", "Portrait"),
+                ("Landscape", "Landscape", "Landscape")
+            ),
+            default="Portrait",
+            update=update_settings_cb,
+            )
+    preset = EnumProperty(
+            name="Select Preset",
+            description="Select from preset",
+            items=paper_presets,
+            default="custom_1_1",
+            update=update_settings_cb,
+            )
+    dpi = IntProperty(
+            name="DPI",
+            description="Dots per Inch",
+            default=300,
+            min=72, max=1800,
+            update=update_settings_cb,
+            )
+    width_cm = FloatProperty(
+            name="Width",
+            description="Width in CM",
+            default=5.0,
+            min=1.0, max=100000.0,
+            update=update_settings_cb,
+            )
+    height_cm = FloatProperty(
+            name="Height",
+            description="Height in CM",
+            default=3.0,
+            min=1.0, max=100000.0,
+            update=update_settings_cb,
+            )
+    width_px = IntProperty(
+            name="Pixel Width",
+            description="Pixel Width",
+            default=900,
+            min=4, max=10000,
+            update=update_settings_cb,
+            )
+    height_px = IntProperty(
+            name="Pixel Height",
+            description="Pixel Height",
+            default=600,
+            min=4, max=10000,
+            update=update_settings_cb,
+            )
+    #PRINT TO SCALE
+    print_to_scale = BoolProperty(
+            name="Print to scale"
+            ,description="Print to scale by automatically calculate the correct distance of the camera to the object or the center of scene."
+            ,default=True
+            #,update=print2scale_reset_camera_focal_length_or_orthographic_scale
+    )
+    # Remapping probably will lead to much confusion. e.g. model 10 -> 1 on the plan means the output will be a model copy 10 times smaller.
+    # Many architects will accidentally fill in 1:10 instead because they forget that here the ratio is (model:plan) and not (plan:model) like printed
+    # on the plan. So unfortunately this will cost a lot of trees as the prints in that a size will be rendered useless.
+    # => SO NOW WE USE SCALE FACTOR ONLY! THAT'S MUCH MORE INTUITIVE AND IS NOTHING ELSE than print ratio but without the confusion.
+    #in_print2scale_scale_remap_source_model = IntProperty(
+    #        name="Model - Print ratio denominator (Model, Map source)"
+    #        ,description="If the model value is greater than the real world value (e.g. 2:1) then the printed output will be scaled down to 1/2 the model size. is e.g. 10 and the real world value 1, then we have a print ratio of 10:1, that is 10 model units print to 1 real world unit. So a 10m model becomes 1m. Thus the printed plan is to scale in a ratio of 1:10 (while the model is in the opposite ratio of 10:1)."
+    #        ,default=1
+    #        ,min=1
+    #        ,max=10000
+    #        ,update=print2scale_recalculate_camera_focal_length_or_orthographic_scale
+    #)
+    #in_print2scale_scale_remap_target_printed = IntProperty(
+    
+    # NOTE:
+    # The print ratio is nothing else than a scale factor. E.g. 1:10 on a plan means the original real measurements are scaled down by factor 10.
+    # ATTENTION:
+    # Precondition is that the 3D model must be modelled to scale. Only then printing a plan to scale, scaled down or up, gives meaningful dimensions.
+    # E.g. if a 1m long wing is modelled with 1mm length in blender instead, then it has to be printed with a 1000:1 for a 1:1 scale on a 1m sheet
+    # or 100:1 on a 1/10m sheet, resulting in a factor of 1:10. Unfortunately the program can't know if the model now really is that small (1mm) or
+    # not and labels the plan as 100:1 in scale - obviously confusing all engineers and architects involved.
+    # Either scaling the model up or changing the unit settings scale can solve this. From experience the first approach can prove difficult
+    # as this can lead to strange behaviour of modifiers and any kind of relationsships of objects of the model - often messing up the complete model.
+    # The latter - changing the unit settings - is okay, but results in modularity problems if this setting is different in each scene,
+    # so when finally importing one model into another scene, a lot of new problems arise. Also problematic are discrepancies in the grid and blender's
+    # buildin-measurement functionality (N panel, e.g. edge info) as well as the bullet engine or other features that rely on physically accurate units
+    # (and from what reason ever (there are plenty!) don't take the unit scale into account correctly).
+    # The loss of modularity is such a big problem that it's good to know that all this trouble can be avoided by simply modelling to scale.
+    # (While model accuracy might prove inaccurate if modelling to scale without scaling up the model as the grids resolution is limited! So there is no silverbullet.)
+    scale_factor = FloatProperty(
+            name="Print scale factor"
+            ,description="Scale big models down (scale factor <1) or tiny models up (scale factor >1). E.g. 10 results in scaling up tenfold, a 1meter model will fill 10m on a giant sheet of papyrus when printed out with this setting. On the other hand 0.1 = 1/10 results in a 1:10 plan being printed."
+            ,default=1
+            ,min=0.00000001 #If zero is possible, problems will arise due to division by zero!
+            ,max=10000
+            ,update=print2scale#_recalculate_camera_focal_length_or_orthographic_scale
+    )
+    #cache_scale_ratio_text_object = None # ObjectProperty or ReferenceProperty
+    add_scale_ratio_text = BoolProperty(
+            name="Add scale ratio text."
+            ,description="Whether to add a text representation of the scale factor (as ratio) or not."
+            ,default=True
+            ,update=print2scale#_reset_camera_focal_length_or_orthographic_scale
+    )
+    # Remapping probably will lead to much confusion. e.g. model 10 -> 1 on the plan means the output will be a model copy 10 times smaller.
+    # Many architects will accidentally fill in 1:10 instead because they forget that here the ratio is (model:plan) and not (plan:model) like printed
+    text_height = FloatProperty(
+            name="Text height."
+            ,description="Text height as printed. Given in Standard International units. Defaults to 1cm if zero."
+            ,default=.005 # m = .5cm = 5mm
+            ,min=0.0
+            ,max=100.0 # 100m is quite huge already, even for graffity.
+            #,update=ensure_height <- if text object is selected and active. 
+            ,update=update_settings_cb
+    )
+    
+    # Margins for printers that require a blank border (due to technical or visual reasons):
+    use_margins = BoolProperty(
+            name="Use margins"
+            ,description="Calculate the render size such that margins won't be rendered (results in smaller rendered image)."
+            ,default=True
+            ,update=update_settings_cb
+    )
+    margin_top = FloatProperty(
+            name="Top margin"
+            ,description="Blank space from the top paper edge."
+            ,default=.015 # 1.5cm  #1 # 1%
+            ,min=0.0
+            ,max=100.0
+            ,update=update_settings_cb
+    )
+    margin_right = FloatProperty(
+            name="Right margin"
+            ,description="Blank space from the right paper edge."
+            ,default=.015 # 1.5cm  #1 # 1%
+            ,min=0.0
+            ,max=100.0
+            ,update=update_settings_cb
+    )
+    margin_bottom = FloatProperty(
+            name="Bottom margin"
+            ,description="Blank space from the bottom paper edge."
+            ,default=.015 # 1.5cm  #1 # 1%
+            ,min=0.0
+            ,max=100.0
+            ,update=update_settings_cb
+    )
+    margin_left = FloatProperty(
+            name="Left margin"
+            ,description="Blank space from the left paper edge."
+            ,default=.015 # 1.5cm  #1 # 1%
+            ,min=0.0
+            ,max=100.0
+            ,update=update_settings_cb
+    )
+    
+    
+    # Position within render:
+    margin_top_bottom = FloatProperty(
+            name="Vertical margin"
+            ,description="Distance to top, bottom edges. Interpreted as percentage if >= 1."
+            ,default=1 # 1%
+            ,min=0.0
+            ,max=100.0
+    )
+    margin_left_right = FloatProperty(
+            name="Horizontal margin"
+            ,description="Distance to left, right edges. Interpreted as percentage if >= 1."
+            ,default=1 # 1%
+            ,min=0.0
+            ,max=100.0
+            #,update=position_within_render <- requires parameters.
+    )
+
+
     
     
 
