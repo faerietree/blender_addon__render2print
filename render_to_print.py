@@ -128,7 +128,7 @@ def update_settings_cb(self, context):
         rendersettings = context.scene.render
         render_x_m = pixels_to_printed_m(rendersettings.resolution_x, ps)
         render_y_m = pixels_to_printed_m(rendersettings.resolution_y, ps)
-        pixels_from_print(ps)
+        pixels_from_print(context, ps)
         offset_camera(context)
         if ps.add_scale_ratio_text:
             height_max = ps.width_cm / m_TO_cm
@@ -166,6 +166,9 @@ def update_settings_cb(self, context):
             if margin_bottom_m > length_available:
                 ps.margin_bottom = length_available
 
+        if not ps.update_manually:
+            bpy.ops.render.apply_print_settings()
+            
         update_settings_cb.level = False
 
 update_settings_cb.level = False
@@ -206,19 +209,25 @@ def offset_camera(context):
     camera = context.scene.camera
     if camera:
             
-        margin_right_m = ps.margin_right
-        if ps.margin_right >= 1:
-            margin_right_m = pixels_to_printed_m(context.scene.render.resolution_x, ps) * ps.margin_right / 100.0
-        camera.delta_location[0] = ps.margin_left - ps.margin_right
+        margin_left_m = rel_to_abs_m(
+                ps.margin_left, 
+                pixels_to_printed_m(context.scene.render.resolution_x, ps)
+                )
+        margin_right_m = rel_to_abs_m(
+                ps.margin_right, 
+                pixels_to_printed_m(context.scene.render.resolution_x, ps)
+                )
+        camera.delta_location[0] = margin_left_m - margin_right_m
         
-        margin_top_m = ps.margin_top
-        if ps.margin_top >= 1:
-            margin_top_m = pixels_to_printed_m(context.scene.render.resolution_y, ps) * ps.margin_top / 100.0
-            
-        margin_bottom_m = ps.margin_bottom
-        if ps.margin_bottom >= 1:
-            margin_bottom_m = pixels_to_printed_m(context.scene.render.resolution_y, ps) * ps.margin_bottom / 100.0
-        camera.delta_location[1] = ps.margin_bottom - ps.margin_top
+        margin_top_m = rel_to_abs_m(
+                ps.margin_top, 
+                pixels_to_printed_m(context.scene.render.resolution_y, ps)
+                )
+        margin_bottom_m = rel_to_abs_m(
+                ps.margin_bottom, 
+                pixels_to_printed_m(context.scene.render.resolution_y, ps)
+                )
+        camera.delta_location[1] = margin_bottom_m - margin_top_m
 
 
 
@@ -268,6 +277,13 @@ def print2scale_processInput(self, context):
 
 
 class RenderPrintSettings(PropertyGroup):
+    update_manually = BoolProperty(
+            name="Update manually"
+            ,description="If enabled apply settings manually instead of realtime update."
+            ,default=False
+            ,update=update_settings_cb
+    )
+    
     unit_from = EnumProperty(
             name="Set from",
             description="Set from",
@@ -371,14 +387,14 @@ class RenderPrintSettings(PropertyGroup):
             ,default=1
             ,min=0.00000001 #If zero is possible, problems will arise due to division by zero!
             ,max=10000
-            ,update=print2scale_recalculate_camera_focal_length_or_orthographic_scale
+            ,update=print2scale#_recalculate_camera_focal_length_or_orthographic_scale
     )
     #cache_scale_ratio_text_object = None # ObjectProperty or ReferenceProperty
     add_scale_ratio_text = BoolProperty(
             name="Add scale ratio text."
             ,description="Whether to add a text representation of the scale factor (as ratio) or not."
             ,default=True
-            #,update=print2scale_reset_camera_focal_length_or_orthographic_scale
+            ,update=print2scale#_reset_camera_focal_length_or_orthographic_scale
     )
     # Remapping probably will lead to much confusion. e.g. model 10 -> 1 on the plan means the output will be a model copy 10 times smaller.
     # Many architects will accidentally fill in 1:10 instead because they forget that here the ratio is (model:plan) and not (plan:model) like printed
@@ -480,12 +496,29 @@ def print2scale(ps, context):
             
             
             longer_side = ps.height_cm / m_TO_cm
+            
             if ps.use_margins:
-                longer_side = longer_side - ps.margin_top - ps.margin_bottom
+                margin_top_m = rel_to_abs_m(
+                        ps.margin_top, 
+                        pixels_to_printed_m(context.scene.render.resolution_y, ps)
+                        )
+                margin_bottom_m = rel_to_abs_m(
+                        ps.margin_bottom, 
+                        pixels_to_printed_m(context.scene.render.resolution_y, ps)
+                        )
+                longer_side = longer_side - margin_top_m - margin_bottom_m
             if (ps.width_cm > ps.height_cm): #if (ps.orientation == 'Landscape'):
                 longer_side = ps.width_cm / m_TO_cm
                 if ps.use_margins:
-                    longer_side = longer_side - ps.margin_left - ps.margin_right
+                    margin_left_m = rel_to_abs_m(
+                        ps.margin_left, 
+                        pixels_to_printed_m(context.scene.render.resolution_x, ps)
+                        )
+                    margin_right_m = rel_to_abs_m(
+                        ps.margin_right, 
+                        pixels_to_printed_m(context.scene.render.resolution_x, ps)
+                        )
+                    longer_side = longer_side - margin_left_m - margin_right_m
 
             #print('old ortho scale: ', context.scene.camera.data.ortho_scale)                
             if not context.scene.camera.data.type == 'ORTHO':
@@ -1148,18 +1181,18 @@ def printed_m_to_pixels(m, ps): # inline function
     
 
 
-def derive_width_pixels(ps):
+def derive_width_pixels(context, ps):
     m = ps.width_cm / m_TO_cm
     if ps.use_margins:
-        m = m - ps.margin_left - ps.margin_right
+        m = m - rel_to_abs_m(ps.margin_left, pixels_to_printed_m(context.scene.render.resolution_x, ps)) - rel_to_abs_m(ps.margin_right, pixels_to_printed_m(context.scene.render.resolution_x, ps))
     ps.width_px = max(printed_m_to_pixels(m, ps), 4)
 
 
 
-def derive_height_pixels(ps):
+def derive_height_pixels(context, ps):
     m = ps.height_cm / m_TO_cm
     if ps.use_margins:
-        m = m - ps.margin_top - ps.margin_bottom
+        m = m - rel_to_abs_m(ps.margin_top, pixels_to_printed_m(context.scene.render.resolution_y, ps)) - rel_to_abs_m(ps.margin_bottom, pixels_to_printed_m(context.scene.render.resolution_y, ps))
     ps.height_px = max(printed_m_to_pixels(m, ps), 4)
 
 
@@ -1169,7 +1202,7 @@ def pixels_to_printed_m(pixel, ps):
 
 
 
-def pixels_from_print(ps):
+def pixels_from_print(context, ps):
     tipo, dim_w, dim_h = paper_presets_data[ps.preset]
 
     if tipo != "custom":
@@ -1181,8 +1214,8 @@ def pixels_from_print(ps):
             ps.width_cm = dim_w
             ps.height_cm = dim_h
         # Update potentially outdated pixel values: 
-        derive_width_pixels(ps) 
-        derive_height_pixels(ps) 
+        derive_width_pixels(context, ps)
+        derive_height_pixels(context, ps)
         
     else:
         #dim_w = ps.width_cm
@@ -1194,9 +1227,25 @@ def pixels_from_print(ps):
             ps.width_cm = float(ps.width_px) / float(ps.dpi) * in_TO_cm
             ps.height_cm = float(ps.height_px) / float(ps.dpi) * in_TO_cm
             if ps.use_margins:
-                ps.width_cm += ps.margin_left * m_TO_cm + ps.margin_right * m_TO_cm
+                margin_left_m = rel_to_abs_m(
+                        ps.margin_left, 
+                        pixels_to_printed_m(context.scene.render.resolution_x, ps)
+                        )
+                margin_right_m = rel_to_abs_m(
+                        ps.margin_right, 
+                        pixels_to_printed_m(context.scene.render.resolution_x, ps)
+                        )
+                ps.width_cm += margin_left_m * m_TO_cm + margin_right_m * m_TO_cm
             if ps.use_margins:
-                ps.height_cm += ps.margin_top * m_TO_cm + ps.margin_bottom * m_TO_cm
+                margin_top_m = rel_to_abs_m(
+                        ps.margin_top, 
+                        pixels_to_printed_m(context.scene.render.resolution_y, ps)
+                        )
+                margin_bottom_m = rel_to_abs_m(
+                        ps.margin_bottom, 
+                        pixels_to_printed_m(context.scene.render.resolution_y, ps)
+                        )
+                ps.height_cm += margin_top_m * m_TO_cm + margin_bottom_m * m_TO_cm
 
 
 
@@ -1279,8 +1328,18 @@ class RENDER_PT_print(Panel):
         row6.label("Inch Width: %.2f" % (ps.width_cm / 2.54))
         row6.label("Inch Height: %.2f" % (ps.height_cm / 2.54))
         col.separator()
-
-        row7.operator("render.apply_print_settings", icon="RENDER_STILL")
+        
+        #split = row7.split()
+        #row = split.row()
+        row71 = row7
+        row71.active = True
+        row71.prop(ps, "update_manually")
+        #row = split.row()
+        if ps.update_manually:
+        #    row.active = True
+        #else:
+        #    row.active = False
+            row71.operator("render.apply_print_settings", icon="RENDER_STILL")
 
         # Hide UI elements when logic demands it:
         tipo = paper_presets_data[ps.preset][0]
@@ -1417,12 +1476,11 @@ class RENDER_OT_apply_print_settings(Operator):
 
     def execute(self, context):
 
-        scene = context.scene
-        ps = scene.print_settings
+        ps = context.scene.print_settings
 
-        pixels_from_print(ps)
+        pixels_from_print(context, ps)
 
-        render = scene.render
+        render = context.scene.render
         render.resolution_x = max(ps.width_px, 4)
         render.resolution_y = max(ps.height_px, 4)
         
