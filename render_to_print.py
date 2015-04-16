@@ -238,6 +238,8 @@ def print2scale_recalculate_camera_focal_length_or_orthographic_scale(self, cont
     if print2scale_recalculate_camera_focal_length_or_orthographic_scale.level == False:
         print2scale_recalculate_camera_focal_length_or_orthographic_scale.level = True
         print2scale_processInput(self, context)
+        if not self.update_manually:
+            print2scale(self, context)
         print2scale_recalculate_camera_focal_length_or_orthographic_scale.level = False
 
 print2scale_recalculate_camera_focal_length_or_orthographic_scale.level = False
@@ -1426,7 +1428,7 @@ class RenderPrintSettings(PropertyGroup):
             ,default=1
             ,min=0.00000001 #If zero is possible, problems will arise due to division by zero!
             ,max=10000
-            ,update=print2scale#_recalculate_camera_focal_length_or_orthographic_scale
+            ,update=print2scale_recalculate_camera_focal_length_or_orthographic_scale
     )
     #cache_scale_ratio_text_object = None # ObjectProperty or ReferenceProperty
     add_scale_ratio_text = BoolProperty(
