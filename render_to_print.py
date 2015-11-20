@@ -1063,8 +1063,8 @@ def pixels_from_print(context, ps):
         #dim_w = ps.width_cm
         #dim_h = ps.height_cm
         if ps.unit_from == "CM_TO_PIXELS":
-            derive_width_pixels(ps) 
-            derive_height_pixels(ps) 
+            derive_width_pixels(context, ps) 
+            derive_height_pixels(context, ps) 
         else: #PIXELS_TO_CM
             ps.width_cm = float(ps.width_px) / float(ps.dpi) * in_TO_cm
             ps.height_cm = float(ps.height_px) / float(ps.dpi) * in_TO_cm
@@ -1170,8 +1170,8 @@ class RENDER_PT_print(Panel):
         row5.prop(ps, "height_px")
 
         col.separator()
-        row6.label("Inch Width: %.2f" % (ps.width_cm / 2.54))
-        row6.label("Inch Height: %.2f" % (ps.height_cm / 2.54))
+        row6.label("Inch Width: %.2f" % (ps.width_cm / in_TO_cm))
+        row6.label("Inch Height: %.2f" % (ps.height_cm / in_TO_cm))
         col.separator()
         
         #split = row7.split()
